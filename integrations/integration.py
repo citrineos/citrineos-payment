@@ -1,4 +1,5 @@
 
+from io import BytesIO
 from logging import error, info
 from fastapi import FastAPI
 import stripe
@@ -9,7 +10,7 @@ from schemas.checkouts import RequestStartStopStatusEnumType
 from utils.utils import generate_pricing
 
 
-class Integration:
+class OCPPIntegration:
     def __init__(self) -> None:
         pass
 
@@ -54,3 +55,23 @@ class Integration:
     
         info(f"CAPTURE SUCCESS - Captured the costs for Checkout: {db_checkout.id}")
         return
+    
+class FileIntegration:
+    def __init__(self) -> None:
+        pass
+    
+    """
+    Uploads a file to FileIntegration.
+    
+    Parameters:
+        self: FileIntegration - The FileIntegration instance.
+        file: BytesIO - The file to upload.
+        mime_type: str - The MIME type of the file.
+        filename: str - The name of the file.
+        filetitle: str - The title of the file.
+    
+    Returns:
+        str - A url to the uploaded file.
+    """
+    def upload_file(self, file: BytesIO, mime_type: str, filename: str, filetitle: str) -> str:
+        pass
