@@ -12,7 +12,7 @@ from config import Config
 from logging import debug, exception, info, warning
 from db.init_db import get_db, Checkout as CheckoutModel, Connector as ConnectorModel, Evse as EvseModel
 
-from integrations.integration import Integration
+from integrations.integration import OcppIntegration
 from schemas.checkouts import RequestStartStopStatusEnumType
 from schemas.status_notification import StatusNotificationRequest
 from schemas.transaction_event import MeasurandEnumType, TransactionEventEnumType, TransactionEventRequest
@@ -31,7 +31,7 @@ class CitrineOSeventHeaders(BaseModel):
     stationId: str 
 
 
-class CitrineOSIntegration(Integration):
+class CitrineOSIntegration(OcppIntegration):
     def __init__(self) -> None:
         pass
 
