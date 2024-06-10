@@ -37,6 +37,24 @@ class TransactionType(BaseModel):
     transactionId: str    
     remoteStartId: int 
 
+class IdTokenType(str, Enum):
+    Central = "Central"
+    eMAID = "eMAID"
+    ISO14443 = "ISO14443"
+    ISO15693 = "ISO15693"
+    KeyCode = "KeyCode"
+    Local = "Local"
+    MacAddress = "MacAddress"
+    NoAuthorization = "NoAuthorization"
+    
+class AdditionalInfoType(BaseModel):
+    additionalIdToken: str
+    type: str
+
+class IdTokenType(BaseModel):
+    idToken: str
+    type: IdTokenType
+    additionalInfo: list[AdditionalInfoType]
 
 class MeasurandEnumType(str, Enum):
     CurrentExport = "Current.Export"
@@ -99,4 +117,5 @@ class TransactionEventRequest(BaseModel):
     timestamp: datetime
     triggerReason: TriggerReasonEnumType
     transactionInfo: TransactionType
+    idToken: IdTokenType
     meterValue: list[MeterValueType] | None = None
