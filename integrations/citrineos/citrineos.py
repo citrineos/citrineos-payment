@@ -7,15 +7,16 @@ from pydantic import BaseModel
 from pydantic_core import ValidationError
 import requests
 from sqlalchemy.orm import Session
+import stripe
 
 from config import Config
 from logging import debug, exception, info, warning
-from db.init_db import get_db, Checkout as CheckoutModel, Connector as ConnectorModel, Evse as EvseModel
+from db.init_db import get_db, Checkout as CheckoutModel, Connector as ConnectorModel, Evse as EvseModel, Location as LocationModel, Tariff as TariffModel
 
-from integrations.integration import OcppIntegration
+from integrations.integration import OCPPIntegration
 from schemas.checkouts import RequestStartStopStatusEnumType
 from schemas.status_notification import StatusNotificationRequest
-from schemas.transaction_event import MeasurandEnumType, TransactionEventEnumType, TransactionEventRequest
+from schemas.transaction_event import MeasurandEnumType, TransactionEventEnumType, TriggerReasonEnumType, TransactionEventRequest
 
 
 class CitrineOsEventAction(str, Enum):
@@ -31,7 +32,7 @@ class CitrineOSeventHeaders(BaseModel):
     stationId: str 
 
 
-class CitrineOSIntegration(OcppIntegration):
+class CitrineOSIntegration(OCPPIntegration):
     def __init__(self) -> None:
         pass
 
@@ -132,9 +133,13 @@ class CitrineOSIntegration(OcppIntegration):
             citrine_os_event = CitrineOSevent(**json.loads(decoded_body))
 
             if(citrine_os_event.action == CitrineOsEventAction.TRANSACTIONEVENT):
+                citrine_os_event_headers = CitrineOSeventHeaders(**event_message.headers)
                 transaction_event = TransactionEventRequest(**citrine_os_event.payload)
                 if transaction_event.eventType == TransactionEventEnumType.Started:
-                    await self.process_transaction_started(transaction_event=transaction_event, )
+                    await self.process_transaction_started(
+                        transaction_event=transaction_event, 
+                        citrine_os_event_headers=citrine_os_event_headers
+                    )
                 elif transaction_event.eventType == TransactionEventEnumType.Updated:
                     await self.process_transaction_updated(transaction_event=transaction_event, )
                 elif transaction_event.eventType == TransactionEventEnumType.Ended:
@@ -159,7 +164,66 @@ class CitrineOSIntegration(OcppIntegration):
             raise e
         
 
-    async def process_transaction_started(self, transaction_event: TransactionEventRequest) -> None:
+    async def process_transaction_started(self, transaction_event: TransactionEventRequest, citrine_os_event_headers: CitrineOSeventHeaders) -> None:
+        triggerReasonNoAuthArray = [TriggerReasonEnumType.CablePluggedIn, TriggerReasonEnumType.SignedDataReceived, TriggerReasonEnumType.EVDetected]
+        if (Config.CITRINEOS_SCAN_AND_CHARGE and transaction_event.triggerReason in triggerReasonNoAuthArray and transaction_event.idToken is None):
+            await self.process_transaction_start_scan_and_charge(
+                transaction_event=transaction_event,
+                citrine_os_event_headers=citrine_os_event_headers
+            )
+        else:
+            await self.process_transaction_start_remote(transaction_event=transaction_event)
+
+
+    async def process_transaction_start_scan_and_charge(self, transaction_event: TransactionEventRequest, citrine_os_event_headers: CitrineOSeventHeaders) -> None:
+        await self.create_payment_link(transaction_event=transaction_event, citrine_os_event_headers=citrine_os_event_headers)
+
+      
+      
+    async def create_payment_link(self, transaction_event: TransactionEventRequest, citrine_os_event_headers: CitrineOSeventHeaders):
+        db: Session = next(get_db())
+        evse = db.query(EvseModel).filter(EvseModel.station_id == citrine_os_event_headers.stationId).first()
+        if evse is None:
+            raise Exception("EVSE not found")
+        
+        tariff = db.query(TariffModel).filter(TariffModel.id == evse.connectors[0].tariff_id).first()
+        if tariff is None:
+            raise Exception("No Tariff for EVSE found")
+
+        location = db.query(LocationModel).filter(LocationModel.id == evse.location_id).first()
+        if location is None:
+            raise Exception("No Location for EVSE found")
+
+        db_checkout = CheckoutModel(
+            connector_id=evse.connectors[0].id,
+            tariff_id=tariff.id
+        )
+        db.add(db_checkout)
+        db.commit()
+        db.refresh(db_checkout)
+        
+        transactionPaymentLink = stripe.PaymentLink.create(
+            line_items=[{
+                "price_data": {
+                    "currency": tariff.currency.lower(),
+                    "product_data": {"name": "Charging Session Authorization Amount"},
+                    "unit_amount": int(tariff.authorization_amount * 100),
+                    "tax_behavior": "inclusive",
+                },
+                "quantity": 1,
+            }],
+            metadata = {
+                "transactionId ": transaction_event.transactionInfo.transactionId,
+            },
+            payment_intent_data={
+                "capture_method": "manual",
+            },
+            payment_method_types=['card'],
+            stripe_account=location.operator.stripe_account_id,
+        )
+        
+        
+    async def process_transaction_start_remote(self, transaction_event: TransactionEventRequest) -> None:    
         db: Session = next(get_db())
         db_checkout = db.query(CheckoutModel) \
             .filter(CheckoutModel.id == transaction_event.transactionInfo.remoteStartId) \
