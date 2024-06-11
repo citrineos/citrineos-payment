@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from config import Config
 from db.init_db import get_db, Checkout as CheckoutModel
-from integrations.integration import Integration
+from integrations.integration import OcppIntegration
 from schemas.checkouts import RequestStartStopStatusEnumType
 
 router = APIRouter()
@@ -68,7 +68,7 @@ async def stripe_webhook(request: Request, STRIPE_SIGNATURE: str | None = Header
         if db_checkout is None:
             raise HTTPException(status_code=404, detail="No checkout found for payment intent")
         
-        ocpp_integration: Integration = request.app.ocpp_integration
+        ocpp_integration: OcppIntegration = request.app.ocpp_integration
         db_checkout.remote_request_status: RequestStartStopStatusEnumType = \
             await ocpp_integration.request_remote_start(
                 checkout_id = db_checkout.id

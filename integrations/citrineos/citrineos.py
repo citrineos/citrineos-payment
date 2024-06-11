@@ -1,4 +1,5 @@
 from enum import Enum
+from io import BytesIO
 import json
 from aio_pika import connect
 from aio_pika.abc import AbstractExchange, AbstractIncomingMessage
@@ -8,12 +9,13 @@ from pydantic_core import ValidationError
 import requests
 from sqlalchemy.orm import Session
 import stripe
+import qrcode
 
 from config import Config
 from logging import debug, exception, info, warning
 from db.init_db import get_db, Checkout as CheckoutModel, Connector as ConnectorModel, Evse as EvseModel, Location as LocationModel, Tariff as TariffModel
 
-from integrations.integration import OCPPIntegration
+from integrations.integration import FileIntegration, OcppIntegration
 from schemas.checkouts import RequestStartStopStatusEnumType
 from schemas.status_notification import StatusNotificationRequest
 from schemas.transaction_event import MeasurandEnumType, TransactionEventEnumType, TriggerReasonEnumType, TransactionEventRequest
@@ -32,9 +34,9 @@ class CitrineOSeventHeaders(BaseModel):
     stationId: str 
 
 
-class CitrineOSIntegration(OCPPIntegration):
-    def __init__(self) -> None:
-        pass
+class CitrineOSIntegration(OcppIntegration):
+    def __init__(self, fileIntegration: FileIntegration):
+        self.fileIntegration = fileIntegration
 
     async def request_remote_start(self, app: FastAPI = None, checkout_id: int = None,) -> RequestStartStopStatusEnumType:
         db: Session = next(get_db())
@@ -53,10 +55,6 @@ class CitrineOSIntegration(OCPPIntegration):
             debug(" [CitrineOS] EVSE not found for remote start request: %r", checkout_id)
             return RequestStartStopStatusEnumType.REJECTED
         
-        request_url = \
-            f"{Config.CITRINEOS_REST_API_REMOTE_START}" \
-            f"?identifier={db_evse.station_id}" \
-            f"&tenantId={db_evse.tenant_id}"
         request_body = {
             "evseId": db_evse.ocpp_evse_id,
             "remoteStartId": db_checkout.id,
@@ -65,13 +63,24 @@ class CitrineOSIntegration(OCPPIntegration):
                 "type": "Central"
             }
         }
-        response = requests.post(request_url, json=request_body)
+        citrineos_module = "evdriver" # TODO set up programatic way to resolve module from action
+        action = "remoteStartTransaction"
+        response = self.send_citrineos_message(station_id=db_evse.station_id, tenant_id=db_evse.tenant_id, url_path=f"{citrineos_module}/{action}", json_payload=request_body)
         debug(" [CitrineOS] request_remote_start response: %r", response)
         remote_start_stop = RequestStartStopStatusEnumType.REJECTED
         if response.status_code == 200:
             if response.json().get("success") == True:
                 remote_start_stop = RequestStartStopStatusEnumType.ACCEPTED
         return remote_start_stop
+
+
+    def send_citrineos_message(self, station_id: str, tenant_id: str, url_path: str, json_payload: str) -> requests.Response:
+        request_url = \
+            f"{Config.CITRINEOS_MESSAGE_API_URL}/{url_path}" \
+            f"?identifier={station_id}" \
+            f"&tenantId={tenant_id}"
+        
+        return requests.post(request_url, json=json_payload)
 
 
     async def receive_events(self, app: FastAPI = None) -> None:
@@ -167,22 +176,20 @@ class CitrineOSIntegration(OCPPIntegration):
     async def process_transaction_started(self, transaction_event: TransactionEventRequest, citrine_os_event_headers: CitrineOSeventHeaders) -> None:
         triggerReasonNoAuthArray = [TriggerReasonEnumType.CablePluggedIn, TriggerReasonEnumType.SignedDataReceived, TriggerReasonEnumType.EVDetected]
         if (Config.CITRINEOS_SCAN_AND_CHARGE and transaction_event.triggerReason in triggerReasonNoAuthArray and transaction_event.idToken is None):
-            await self.process_transaction_start_scan_and_charge(
+            await self.process_transaction_started_scan_and_charge(
                 transaction_event=transaction_event,
                 citrine_os_event_headers=citrine_os_event_headers
             )
         else:
-            await self.process_transaction_start_remote(transaction_event=transaction_event)
+            await self.process_transaction_started_remote(transaction_event=transaction_event)
 
 
-    async def process_transaction_start_scan_and_charge(self, transaction_event: TransactionEventRequest, citrine_os_event_headers: CitrineOSeventHeaders) -> None:
-        await self.create_payment_link(transaction_event=transaction_event, citrine_os_event_headers=citrine_os_event_headers)
-
-      
-      
-    async def create_payment_link(self, transaction_event: TransactionEventRequest, citrine_os_event_headers: CitrineOSeventHeaders):
+    async def process_transaction_started_scan_and_charge(self, transaction_event: TransactionEventRequest, citrine_os_event_headers: CitrineOSeventHeaders) -> None:
+        transactionId = transaction_event.transactionInfo.transactionId
+        stationId = citrine_os_event_headers.stationId
+        
         db: Session = next(get_db())
-        evse = db.query(EvseModel).filter(EvseModel.station_id == citrine_os_event_headers.stationId).first()
+        evse = db.query(EvseModel).filter(EvseModel.station_id == stationId).first()
         if evse is None:
             raise Exception("EVSE not found")
         
@@ -202,28 +209,56 @@ class CitrineOSIntegration(OCPPIntegration):
         db.commit()
         db.refresh(db_checkout)
         
+        payment_link_url =await self.create_payment_link(transactionId=transactionId, tariff=tariff, location=location)
+        
+        qr_code_img = qrcode.make(payment_link_url)
+        # Save the image to an in-memory buffer
+        buffer = BytesIO()
+        debug(type(qr_code_img))
+        debug(dir(qr_code_img))
+        qr_code_img.save(buffer)
+        buffer.seek(0) # Rewind the buffer to the beginning
+        
+        qr_code_img_url = self.fileIntegration.upload_file(buffer, "image/png", f"qrcode_{stationId}_{transactionId}.png", f"QRCode_{stationId}_{transactionId}")
+        set_display_message_request = {
+            "message": {
+                "id": 0, # TODO: Generate Id from message info DB
+                "priority": "AlwaysFront",
+                "transactionId": transactionId,
+                "message": {
+                    "format": "URI",
+                    "content": qr_code_img_url
+                }
+            }
+        }
+        citrineos_module = "configuration" # TODO set up programatic way to resolve module from action
+        action = "setDisplayMessage"
+        
+        self.send_citrineos_message(station_id=stationId, tenant_id=evse.tenant_id, url_path=f"{citrineos_module}/{action}", json_payload=set_display_message_request)
+        
+      
+    async def create_payment_link(self, transactionId: str, tariff: TariffModel, location: LocationModel) -> str:
         transactionPaymentLink = stripe.PaymentLink.create(
             line_items=[{
-                "price_data": {
-                    "currency": tariff.currency.lower(),
-                    "product_data": {"name": "Charging Session Authorization Amount"},
-                    "unit_amount": int(tariff.authorization_amount * 100),
-                    "tax_behavior": "inclusive",
-                },
+                "price": "price_1PQbzLJnD3EghSOgiVZkDc3i", # TODO Set up endpoint to create price from tariff, and store price id on tariff
                 "quantity": 1,
             }],
             metadata = {
-                "transactionId ": transaction_event.transactionInfo.transactionId,
+                "transactionId ": transactionId,
             },
             payment_intent_data={
                 "capture_method": "manual",
             },
             payment_method_types=['card'],
+            restrictions={
+                "completed_sessions": { "limit": int(1) }
+            },
             stripe_account=location.operator.stripe_account_id,
         )
+        return transactionPaymentLink.url
         
         
-    async def process_transaction_start_remote(self, transaction_event: TransactionEventRequest) -> None:    
+    async def process_transaction_started_remote(self, transaction_event: TransactionEventRequest) -> None:    
         db: Session = next(get_db())
         db_checkout = db.query(CheckoutModel) \
             .filter(CheckoutModel.id == transaction_event.transactionInfo.remoteStartId) \

@@ -9,8 +9,11 @@ from integrations.integration import FileIntegration
 REFRESH_TOKEN_REQUEST_BUFFER = 500  # in milliseconds
 
 class BearerAuth(requests.auth.AuthBase):
-    def __call__(self, request, access_token):
-        request.headers["Authorization"] = f"Bearer {access_token}"
+    def __init__(self, access_token):
+        self.access_token = access_token
+    
+    def __call__(self, request):
+        request.headers["Authorization"] = f"Bearer {self.access_token}"
         return request
 
 class DirectusIntegration(FileIntegration):

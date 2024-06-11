@@ -10,7 +10,7 @@ from schemas.checkouts import RequestStartStopStatusEnumType
 from utils.utils import generate_pricing
 
 
-class OCPPIntegration:
+class OcppIntegration:
     def __init__(self) -> None:
         pass
 

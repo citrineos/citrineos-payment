@@ -35,7 +35,7 @@ class TriggerReasonEnumType(str, Enum):
 
 class TransactionType(BaseModel):
     transactionId: str    
-    remoteStartId: int 
+    remoteStartId: int | None = None
 
 class IdTokenType(str, Enum):
     Central = "Central"
@@ -54,7 +54,7 @@ class AdditionalInfoType(BaseModel):
 class IdTokenType(BaseModel):
     idToken: str
     type: IdTokenType
-    additionalInfo: list[AdditionalInfoType]
+    additionalInfo: list[AdditionalInfoType] | None = None
 
 class MeasurandEnumType(str, Enum):
     CurrentExport = "Current.Export"
@@ -117,5 +117,5 @@ class TransactionEventRequest(BaseModel):
     timestamp: datetime
     triggerReason: TriggerReasonEnumType
     transactionInfo: TransactionType
-    idToken: IdTokenType
+    idToken: IdTokenType | None = None
     meterValue: list[MeterValueType] | None = None

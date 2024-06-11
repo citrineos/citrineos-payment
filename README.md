@@ -1,8 +1,23 @@
 # Configuration
 Main important config keys which can be set via ENV Variables:
 
-## CitrineOS REST API URL
-CITRINEOS_REST_API_REMOTE_START="http://localhost:8080/ocpp/evdriver/requestStartTransaction"
+## CitrineOS MESSAGE API URL - NO Trailing Slash
+CITRINEOS_MESSAGE_API_URL="http://localhost:8080/ocpp"
+
+## CitrineOS SCAN AND CHARGE - enable/disable feature
+CITRINEOS_SCAN_AND_CHARGE="true"
+
+## Url for CitrineOS Directus instance - (required for Scan and Charge)
+CITRINEOS_DIRECTUS_URL="http://localhost:8055"
+
+## Login Email for CitrineOS Directus instance - (required for Scan and Charge)
+CITRINEOS_DIRECTUS_LOGIN_EMAIL="admin@CitrineOS.com"
+
+## Login Password for CitrineOS Directus instance - (required for Scan and Charge)
+CITRINEOS_DIRECTUS_LOGIN_PASSWORD="CitrineOS!"
+
+## CitrineOS Directus QR Code folder - (required for Scan and Charge)
+CITRINEOS_DIRECTUS_QR_CODE_FOLDER="put folder id here"
 
 ## API URL which will be used by the frontend application
 CLIENT_API_URL="http://localhost:9010/api"
