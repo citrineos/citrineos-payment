@@ -96,6 +96,7 @@ class Checkout(Base):
     payment_intent_id = Column(String(255), index=True, unique=True)
     connector_id = Column(Integer, ForeignKey(f"{Config.DB_TABLE_PREFIX}connectors.id"))
     tariff_id = Column(Integer, ForeignKey(f"{Config.DB_TABLE_PREFIX}tariffs.id"))
+    qr_code_message_id = Column(Integer, )
 
     remote_request_status = Column(String(8),)
     remote_request_transaction_id = Column(String(36),)

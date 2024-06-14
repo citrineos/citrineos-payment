@@ -64,6 +64,8 @@ class CitrineOSIntegration(OcppIntegration):
                 "type": "Central"
             }
         }
+        debug(" [Stripe] remote start request: %r", json.dumps(request_body))
+        
         citrineos_module = "evdriver" # TODO set up programatic way to resolve module from action
         action = "requestStartTransaction"
         response = self.send_citrineos_message(station_id=db_evse.station_id, tenant_id=db_evse.tenant_id, url_path=f"{citrineos_module}/{action}", json_payload=request_body)
@@ -298,6 +300,10 @@ class CitrineOSIntegration(OcppIntegration):
         action = "setDisplayMessage"
         
         self.send_citrineos_message(station_id=stationId, tenant_id=evse.tenant_id, url_path=f"{citrineos_module}/{action}", json_payload=set_display_message_request)
+        db_checkout.qr_code_message_id = nextMessageId
+        db.add(db_checkout)
+        db.commit()
+        
         
       
     async def create_payment_link(self, stripe_price_id: str, stripe_account_id: str, stationId: str, transactionId: str, checkoutId: int) -> str:
