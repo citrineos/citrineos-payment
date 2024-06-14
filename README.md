@@ -4,6 +4,9 @@ Main important config keys which can be set via ENV Variables:
 ## CitrineOS MESSAGE API URL - NO Trailing Slash
 CITRINEOS_MESSAGE_API_URL="http://localhost:8080/ocpp"
 
+## CitrineOS DATA API URL - NO Trailing Slash
+CITRINEOS_DATA_API_URL="http://localhost:8080/data"
+
 ## CitrineOS SCAN AND CHARGE - enable/disable feature
 CITRINEOS_SCAN_AND_CHARGE="true"
 

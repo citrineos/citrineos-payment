@@ -111,6 +111,9 @@ class SampledValueType(BaseModel):
 class MeterValueType(BaseModel):
     sampledValue: list[SampledValueType]
 
+class OcppEvseType(BaseModel):
+    id: int
+    connectorId: int | None = None
 
 class TransactionEventRequest(BaseModel):
     eventType: TransactionEventEnumType
@@ -118,4 +121,5 @@ class TransactionEventRequest(BaseModel):
     triggerReason: TriggerReasonEnumType
     transactionInfo: TransactionType
     idToken: IdTokenType | None = None
+    evse: OcppEvseType | None = None
     meterValue: list[MeterValueType] | None = None

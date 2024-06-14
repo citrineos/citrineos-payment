@@ -49,6 +49,9 @@ def create_checkout(request_body: CheckoutCreate, db: Session = Depends(get_db))
                 "quantity": 1,
             },
         ],
+        metadata= {
+            "checkoutId": db_checkout.id
+        },
         payment_intent_data={"capture_method": "manual",},
         stripe_account=location.operator.stripe_account_id,
         mode='payment',

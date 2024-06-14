@@ -1,6 +1,7 @@
 from enum import Enum
 from io import BytesIO
 import json
+from uuid import uuid4
 from aio_pika import connect
 from aio_pika.abc import AbstractExchange, AbstractIncomingMessage
 from fastapi import FastAPI
@@ -13,7 +14,7 @@ import qrcode
 
 from config import Config
 from logging import debug, exception, info, warning
-from db.init_db import get_db, Checkout as CheckoutModel, Connector as ConnectorModel, Evse as EvseModel, Location as LocationModel, Tariff as TariffModel
+from db.init_db import MessageInfo as MessageInfoModel, get_db, Checkout as CheckoutModel, Connector as ConnectorModel, Evse as EvseModel, Location as LocationModel, Tariff as TariffModel
 
 from integrations.integration import FileIntegration, OcppIntegration
 from schemas.checkouts import RequestStartStopStatusEnumType
@@ -64,7 +65,7 @@ class CitrineOSIntegration(OcppIntegration):
             }
         }
         citrineos_module = "evdriver" # TODO set up programatic way to resolve module from action
-        action = "remoteStartTransaction"
+        action = "requestStartTransaction"
         response = self.send_citrineos_message(station_id=db_evse.station_id, tenant_id=db_evse.tenant_id, url_path=f"{citrineos_module}/{action}", json_payload=request_body)
         debug(" [CitrineOS] request_remote_start response: %r", response)
         remote_start_stop = RequestStartStopStatusEnumType.REJECTED
@@ -73,6 +74,42 @@ class CitrineOSIntegration(OcppIntegration):
                 remote_start_stop = RequestStartStopStatusEnumType.ACCEPTED
         return remote_start_stop
 
+
+    async def create_authorization(self, transaction_id: str, payment_intent_id: str, app: FastAPI = None,):
+        idToken = {
+            "idToken": str(uuid4()),
+            "type": "Central",
+            "additionalInfo": [
+                {
+                    "additionalIdToken": transaction_id,
+                    "type": "TransactionId"
+                },
+                {
+                    "additionalIdToken": payment_intent_id,
+                    "type": "PaymentIntentId"
+                }
+            ]
+        }
+        request_body = {
+            "idToken": idToken,
+            "idTokenInfo": {
+                "status": "Accepted",
+            }
+        }
+        module = "evdriver"
+        data = "authorization"
+        url_path = f"{module}/{data}"
+        request_url = \
+            f"{Config.CITRINEOS_DATA_API_URL}/{url_path}" \
+            f"?idToken={idToken['idToken']}" \
+            f"&type={idToken['type']}"
+        
+        response = requests.put(request_url, json=request_body)
+        if response.status_code == 200:
+            return request_body
+        exception(" [CitrineOS] Error while creating authorization: %r", response)
+        return
+    
 
     def send_citrineos_message(self, station_id: str, tenant_id: str, url_path: str, json_payload: str) -> requests.Response:
         request_url = \
@@ -189,6 +226,8 @@ class CitrineOSIntegration(OcppIntegration):
         stationId = citrine_os_event_headers.stationId
         
         db: Session = next(get_db())
+        # If pricing is found to vary by evse, we need to change triggerReasonNoAuthArray to mandate events that know the evse
+        # Then add a filter below, EvseModel.ocpp_evse_id == transaction_event.evse.id
         evse = db.query(EvseModel).filter(EvseModel.station_id == stationId).first()
         if evse is None:
             raise Exception("EVSE not found")
@@ -209,7 +248,25 @@ class CitrineOSIntegration(OcppIntegration):
         db.commit()
         db.refresh(db_checkout)
         
-        payment_link_url =await self.create_payment_link(transactionId=transactionId, tariff=tariff, location=location)
+        if tariff.stripe_price_id is None:
+            price = stripe.Price.create(
+                currency= tariff.currency.lower(),
+                metadata= { "tariffId": tariff.id },
+                product_data= {"name": "Charging Session Authorization Amount"},
+                tax_behavior= "inclusive",
+                unit_amount= int(tariff.authorization_amount * 100),
+            )
+            tariff.stripe_price_id = price.id
+            db.add(tariff)
+            db.commit()
+        
+        payment_link_url =await self.create_payment_link(
+            stripe_price_id=tariff.stripe_price_id, 
+            stripe_account_id=location.operator.stripe_account_id, 
+            stationId=stationId,
+            transactionId=transactionId,
+            checkoutId=db_checkout.id
+        )
         
         qr_code_img = qrcode.make(payment_link_url)
         # Save the image to an in-memory buffer
@@ -220,9 +277,15 @@ class CitrineOSIntegration(OcppIntegration):
         buffer.seek(0) # Rewind the buffer to the beginning
         
         qr_code_img_url = self.fileIntegration.upload_file(buffer, "image/png", f"qrcode_{stationId}_{transactionId}.png", f"QRCode_{stationId}_{transactionId}")
+        
+        mostRecentMessageInfoForStation = db \
+            .query(MessageInfoModel) \
+            .filter(MessageInfoModel.stationId == stationId) \
+            .order_by(MessageInfoModel.id.desc()).first()
+        nextMessageId = 0 if mostRecentMessageInfoForStation is None else mostRecentMessageInfoForStation.id + 1
         set_display_message_request = {
             "message": {
-                "id": 0, # TODO: Generate Id from message info DB
+                "id": nextMessageId,
                 "priority": "AlwaysFront",
                 "transactionId": transactionId,
                 "message": {
@@ -237,14 +300,16 @@ class CitrineOSIntegration(OcppIntegration):
         self.send_citrineos_message(station_id=stationId, tenant_id=evse.tenant_id, url_path=f"{citrineos_module}/{action}", json_payload=set_display_message_request)
         
       
-    async def create_payment_link(self, transactionId: str, tariff: TariffModel, location: LocationModel) -> str:
+    async def create_payment_link(self, stripe_price_id: str, stripe_account_id: str, stationId: str, transactionId: str, checkoutId: int) -> str:
         transactionPaymentLink = stripe.PaymentLink.create(
             line_items=[{
-                "price": "price_1PQbzLJnD3EghSOgiVZkDc3i", # TODO Set up endpoint to create price from tariff, and store price id on tariff
+                "price": stripe_price_id,
                 "quantity": 1,
             }],
             metadata = {
-                "transactionId ": transactionId,
+                "stationId": stationId,
+                "transactionId": transactionId,
+                "checkoutId": checkoutId
             },
             payment_intent_data={
                 "capture_method": "manual",
@@ -253,7 +318,7 @@ class CitrineOSIntegration(OcppIntegration):
             restrictions={
                 "completed_sessions": { "limit": int(1) }
             },
-            stripe_account=location.operator.stripe_account_id,
+            stripe_account=stripe_account_id,
         )
         return transactionPaymentLink.url
         
