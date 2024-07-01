@@ -7,7 +7,7 @@ from json import loads
 from sqlalchemy.orm import Session
 
 from config import Config
-from db.init_db import Evse, Transaction, get_db, Checkout as CheckoutModel
+from db.init_db import Connector, Evse, Transaction, get_db, Checkout as CheckoutModel
 from integrations.integration import OcppIntegration
 from schemas.checkouts import RequestStartStopStatusEnumType
 
@@ -60,27 +60,27 @@ async def stripe_webhook(request: Request, STRIPE_SIGNATURE: str | None = Header
     #             await publish_message(topic="ampay.Account.updated", message=ampay_account)
     #     create_task(update_account(account=account))
     # elif event.get('type') == 'charge.succeeded':
-    if event.get('type') == 'charge.succeeded':
-        # Payment was successful, try to start a charging session
+    # if event.get('type') == 'charge.succeeded':
+    #     # Payment was successful, try to start a charging session
 
-        payment_intent: str = event.get('data').get('object').get('payment_intent')
-        if payment_intent is None:
-            raise HTTPException(status_code=404, detail="No payment intent found in event")
+    #     payment_intent: str = event.get('data').get('object').get('payment_intent')
+    #     if payment_intent is None:
+    #         raise HTTPException(status_code=404, detail="No payment intent found in event")
         
-        db_checkout = db.query(CheckoutModel).filter(CheckoutModel.payment_intent_id == payment_intent).first()
-        if db_checkout is None:
-            raise HTTPException(status_code=404, detail="No checkout found for payment intent")
+    #     db_checkout = db.query(CheckoutModel).filter(CheckoutModel.payment_intent_id == payment_intent).first()
+    #     if db_checkout is None:
+    #         raise HTTPException(status_code=404, detail="No checkout found for payment intent")
         
-        ocpp_integration: OcppIntegration = request.app.ocpp_integration
-        db_checkout.remote_request_status: RequestStartStopStatusEnumType = \
-            await ocpp_integration.request_remote_start(
-                checkout_id = db_checkout.id
-            )
-        db.add(db_checkout)
-        db.commit()
-        db.refresh(db_checkout)
+    #     ocpp_integration: OcppIntegration = request.app.ocpp_integration
+    #     db_checkout.remote_request_status: RequestStartStopStatusEnumType = \
+    #         await ocpp_integration.request_remote_start(
+    #             checkout_id = db_checkout.id
+    #         )
+    #     db.add(db_checkout)
+    #     db.commit()
+    #     db.refresh(db_checkout)
         
-        return None
+    #     return None
     if event.get('type') == 'checkout.session.completed':
         # A Stripe Checkout session completed
         # Payment was successful, try to start a charging session
@@ -110,11 +110,52 @@ async def handle_web_portal(db: Session, ocpp_integration: OcppIntegration, paym
         raise HTTPException(status_code=404, detail="No checkout found for payment intent")
     
     db_checkout.payment_intent_id = paymentIntentId
+    db.add(db_checkout)
+    db.commit()
     
-    db_checkout.remote_request_status: RequestStartStopStatusEnumType = \
-        await ocpp_integration.request_remote_start(
-            checkout_id = db_checkout.id
-        )
+    # TODO: Remove this part when CitrineOS is correctly saving the idToken from RemoteStartRequests.
+    authorization = await ocpp_integration.create_authorization(
+        f"{Config.OCPP_REMOTESTART_IDTAG_PREFIX}{db_checkout.id}",
+        "Central",
+        [
+            (paymentIntentId, "PaymentIntentId"),
+        ]
+    )
+    if authorization is None:
+        debug(" [Stripe] Unable to create authorization for transaction")
+        cancel_payment_intent(paymentIntentId)
+        raise HTTPException(status_code=404, detail="Unable to create authorization for transaction")
+
+    idToken = authorization['idToken']
+    request_body = {
+        "remoteStartId": checkoutId,
+        "idToken": idToken
+    }
+    
+    db_connector = db.query(Connector).filter(Connector.id == db_checkout.connector_id).first()
+    if db_connector is None:
+        debug(" [CitrineOS] Connector not found for remote start request: %r", db_checkout.id)
+        return RequestStartStopStatusEnumType.REJECTED
+    
+    db_evse = db.query(Evse).filter(Evse.id == db_connector.evse_id).first()
+    if db_evse is None:
+        debug(" [CitrineOS] EVSE not found for remote start request: %r", db_checkout.id)
+        return RequestStartStopStatusEnumType.REJECTED
+    
+    request_body["evseId"] = db_evse.ocpp_evse_id
+        
+    debug(" [Stripe] remote start request: %r", json.dumps(request_body))
+    
+    citrineos_module = "evdriver" # TODO set up programatic way to resolve module from action
+    action = "requestStartTransaction"
+    response = ocpp_integration.send_citrineos_message(station_id=db_evse.station_id, tenant_id=db_evse.tenant_id, url_path=f"{citrineos_module}/{action}", json_payload=request_body)
+    remote_start_stop = RequestStartStopStatusEnumType.REJECTED
+    if response.status_code == 200:
+        if response.json().get("success") == True:
+            remote_start_stop = RequestStartStopStatusEnumType.ACCEPTED
+    db_checkout = db.query(CheckoutModel).filter(CheckoutModel.id == checkoutId).first()
+    db_checkout.remote_request_status = remote_start_stop
+
     db.add(db_checkout)
     db.commit()
     debug(' [Stripe] paymentIntentId: %r, checkoutId: %r, requestStartStatus: %r', db_checkout.payment_intent_id, db_checkout.id, db_checkout.remote_request_status)
@@ -134,8 +175,12 @@ async def handle_scan_and_charge(db: Session, ocpp_integration: OcppIntegration,
         raise HTTPException(status_code=404, detail="Transaction is not active")
     
     authorization = await ocpp_integration.create_authorization(
-        transaction_id = transactionId,
-        payment_intent_id = paymentIntentId
+        str(uuid4()),
+        "Central",
+        [
+            (transactionId, "TransactionId"),
+            (paymentIntentId, "PaymentIntentId"),
+        ]
     )
     if authorization is None:
         debug(" [Stripe] Unable to create authorization for transaction")

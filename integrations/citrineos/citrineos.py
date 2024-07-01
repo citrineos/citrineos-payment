@@ -1,6 +1,7 @@
 from enum import Enum
 from io import BytesIO
 import json
+from typing import List, Tuple
 from uuid import uuid4
 from aio_pika import connect
 from aio_pika.abc import AbstractExchange, AbstractIncomingMessage
@@ -77,20 +78,23 @@ class CitrineOSIntegration(OcppIntegration):
         return remote_start_stop
 
 
-    async def create_authorization(self, transaction_id: str, payment_intent_id: str, app: FastAPI = None,):
+    async def create_authorization(self, idToken: str, idTokenType: str, additionalInfo: List[Tuple[str, str]], app: FastAPI = None,):
         idToken = {
-            "idToken": str(uuid4()),
-            "type": "Central",
+            "idToken": idToken,
+            "type": idTokenType,
             "additionalInfo": [
-                {
-                    "additionalIdToken": transaction_id,
-                    "type": "TransactionId"
-                },
-                {
-                    "additionalIdToken": payment_intent_id,
-                    "type": "PaymentIntentId"
-                }
-            ]
+                {"additionalIdToken": item[0], "type": item[1]}
+            for item in additionalInfo] 
+            # [
+            #     {
+            #         "additionalIdToken": transaction_id,
+            #         "type": "TransactionId"
+            #     },
+            #     {
+            #         "additionalIdToken": payment_intent_id,
+            #         "type": "PaymentIntentId"
+            #     }
+            # ]
         }
         request_body = {
             "idToken": idToken,

@@ -1,6 +1,7 @@
 
 from io import BytesIO
 from logging import error, info
+from typing import List, Tuple
 from fastapi import FastAPI
 import requests
 import stripe
@@ -69,7 +70,7 @@ class OcppIntegration:
     Returns:
         obj: an Authorization object or None if an error occurred.
     """
-    async def create_authorization(self, transaction_id: str, payment_intent_id: str, app: FastAPI = None,):
+    async def create_authorization(self, idToken: str, idTokenType: str, additionalInfo: List[Tuple[str, str]], app: FastAPI = None,):
         pass
     
     def send_citrineos_message(self, station_id: str, tenant_id: str, url_path: str, json_payload: str) -> requests.Response:
