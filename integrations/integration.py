@@ -16,9 +16,6 @@ class OcppIntegration:
     def __init__(self) -> None:
         pass
 
-    async def request_remote_start(self, app: FastAPI = None, checkout_id: int = None,) -> RequestStartStopStatusEnumType:
-        pass
-
     async def receive_events(self, app: FastAPI = None) -> None:
         pass
 

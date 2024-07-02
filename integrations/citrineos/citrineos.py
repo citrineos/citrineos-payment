@@ -40,61 +40,13 @@ class CitrineOSIntegration(OcppIntegration):
     def __init__(self, fileIntegration: FileIntegration):
         self.fileIntegration = fileIntegration
 
-    async def request_remote_start(self, app: FastAPI = None, checkout_id: int = None,) -> RequestStartStopStatusEnumType:
-        db: Session = next(get_db())
-        db_checkout = db.query(CheckoutModel).filter(CheckoutModel.id == checkout_id).first()
-        if db_checkout is None:
-            debug(" [CitrineOS] Checkout not found for remote start request: %r", checkout_id)
-            return RequestStartStopStatusEnumType.REJECTED
-        
-        db_connector = db.query(ConnectorModel).filter(ConnectorModel.id == db_checkout.connector_id).first()
-        if db_connector is None:
-            debug(" [CitrineOS] Connector not found for remote start request: %r", checkout_id)
-            return RequestStartStopStatusEnumType.REJECTED
-        
-        db_evse = db.query(EvseModel).filter(EvseModel.id == db_connector.evse_id).first()
-        if db_evse is None:
-            debug(" [CitrineOS] EVSE not found for remote start request: %r", checkout_id)
-            return RequestStartStopStatusEnumType.REJECTED
-        
-        request_body = {
-            "evseId": db_evse.ocpp_evse_id,
-            "remoteStartId": db_checkout.id,
-            "idToken": {
-                "idToken": f"{Config.OCPP_REMOTESTART_IDTAG_PREFIX}{db_checkout.id}",
-                "type": "Central"
-            }
-        }
-        debug(" [Stripe] remote start request: %r", json.dumps(request_body))
-        
-        citrineos_module = "evdriver" # TODO set up programatic way to resolve module from action
-        action = "requestStartTransaction"
-        response = self.send_citrineos_message(station_id=db_evse.station_id, tenant_id=db_evse.tenant_id, url_path=f"{citrineos_module}/{action}", json_payload=request_body)
-        debug(" [CitrineOS] request_remote_start response: %r", response)
-        remote_start_stop = RequestStartStopStatusEnumType.REJECTED
-        if response.status_code == 200:
-            if response.json().get("success") == True:
-                remote_start_stop = RequestStartStopStatusEnumType.ACCEPTED
-        return remote_start_stop
-
-
     async def create_authorization(self, idToken: str, idTokenType: str, additionalInfo: List[Tuple[str, str]], app: FastAPI = None,):
         idToken = {
             "idToken": idToken,
             "type": idTokenType,
             "additionalInfo": [
                 {"additionalIdToken": item[0], "type": item[1]}
-            for item in additionalInfo] 
-            # [
-            #     {
-            #         "additionalIdToken": transaction_id,
-            #         "type": "TransactionId"
-            #     },
-            #     {
-            #         "additionalIdToken": payment_intent_id,
-            #         "type": "PaymentIntentId"
-            #     }
-            # ]
+            for item in additionalInfo]
         }
         request_body = {
             "idToken": idToken,
@@ -307,7 +259,6 @@ class CitrineOSIntegration(OcppIntegration):
         db_checkout.qr_code_message_id = nextMessageId
         db.add(db_checkout)
         db.commit()
-        
         
       
     async def create_payment_link(self, stripe_price_id: str, stripe_account_id: str, stationId: str, transactionId: str, checkoutId: int) -> str:

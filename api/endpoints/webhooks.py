@@ -24,7 +24,7 @@ async def stripe_webhook(request: Request, STRIPE_SIGNATURE: str | None = Header
     # for which the events are coming via the Connect-Webhook.
     # If we would use Stripe Express accounts, the events would be coming via the Account-Webhook
     account_event_types = []
-    connect_event_types = ["account.updated", "charge.succeeded", "checkout.session.completed"]
+    connect_event_types = ["checkout.session.completed"]
     try:
         event_type = loads(body.decode()).get('type')
         debug(' [*WEBHOOK*] Event type {}'.format(event_type))
@@ -48,39 +48,6 @@ async def stripe_webhook(request: Request, STRIPE_SIGNATURE: str | None = Header
     '''
         Removed handling of account changes for now
     '''
-    # if event.get('type') == 'account.updated':
-    #     # Updating Stripe Account (e.g. after onboarding finished)
-    #     account = event.get('data').get('object')
-    #     async def update_account(account):
-    #         db = Database()
-    #         current_account = db.get_by_id(table="Account", id=account.id)
-    #         if current_account is not None:
-    #             ampay_account = {**current_account, **account}
-    #             db.insert_or_update_list(table="Account", items=[ampay_account])
-    #             await publish_message(topic="ampay.Account.updated", message=ampay_account)
-    #     create_task(update_account(account=account))
-    # elif event.get('type') == 'charge.succeeded':
-    # if event.get('type') == 'charge.succeeded':
-    #     # Payment was successful, try to start a charging session
-
-    #     payment_intent: str = event.get('data').get('object').get('payment_intent')
-    #     if payment_intent is None:
-    #         raise HTTPException(status_code=404, detail="No payment intent found in event")
-        
-    #     db_checkout = db.query(CheckoutModel).filter(CheckoutModel.payment_intent_id == payment_intent).first()
-    #     if db_checkout is None:
-    #         raise HTTPException(status_code=404, detail="No checkout found for payment intent")
-        
-    #     ocpp_integration: OcppIntegration = request.app.ocpp_integration
-    #     db_checkout.remote_request_status: RequestStartStopStatusEnumType = \
-    #         await ocpp_integration.request_remote_start(
-    #             checkout_id = db_checkout.id
-    #         )
-    #     db.add(db_checkout)
-    #     db.commit()
-    #     db.refresh(db_checkout)
-        
-    #     return None
     if event.get('type') == 'checkout.session.completed':
         # A Stripe Checkout session completed
         # Payment was successful, try to start a charging session
