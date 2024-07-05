@@ -35,8 +35,26 @@ class TriggerReasonEnumType(str, Enum):
 
 class TransactionType(BaseModel):
     transactionId: str    
-    remoteStartId: int 
+    remoteStartId: int | None = None
 
+class IdTokenType(str, Enum):
+    Central = "Central"
+    eMAID = "eMAID"
+    ISO14443 = "ISO14443"
+    ISO15693 = "ISO15693"
+    KeyCode = "KeyCode"
+    Local = "Local"
+    MacAddress = "MacAddress"
+    NoAuthorization = "NoAuthorization"
+    
+class AdditionalInfoType(BaseModel):
+    additionalIdToken: str
+    type: str
+
+class IdTokenType(BaseModel):
+    idToken: str
+    type: IdTokenType
+    additionalInfo: list[AdditionalInfoType] | None = None
 
 class MeasurandEnumType(str, Enum):
     CurrentExport = "Current.Export"
@@ -93,10 +111,15 @@ class SampledValueType(BaseModel):
 class MeterValueType(BaseModel):
     sampledValue: list[SampledValueType]
 
+class OcppEvseType(BaseModel):
+    id: int
+    connectorId: int | None = None
 
 class TransactionEventRequest(BaseModel):
     eventType: TransactionEventEnumType
     timestamp: datetime
     triggerReason: TriggerReasonEnumType
     transactionInfo: TransactionType
+    idToken: IdTokenType | None = None
+    evse: OcppEvseType | None = None
     meterValue: list[MeterValueType] | None = None

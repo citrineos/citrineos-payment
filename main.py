@@ -1,17 +1,21 @@
+import json
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from requests import Session
 from api.api import api_router
 from asyncio import get_event_loop
 from config import Config
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from logging import basicConfig
+from logging import basicConfig, debug
+from integrations.directus.directus import DirectusIntegration
 from integrations.citrineos.citrineos import CitrineOSIntegration
 from uvicorn import run
 import stripe
 
-from db.init_db import init_db
+from db.init_db import Transaction, get_db, init_db
+from integrations.integration import FileIntegration, OcppIntegration
 
 basicConfig(format=Config.LOG_FORMAT, level=Config.LOG_LEVEL)
 
@@ -29,7 +33,9 @@ app.add_middleware(
 
 ''' On startup of the web app also start the event consumer and set stripe api key '''
 stripe.api_key = Config.STRIPE_API_KEY
-ocpp_integration = CitrineOSIntegration()
+
+file_integration: FileIntegration = DirectusIntegration(Config.CITRINEOS_DIRECTUS_URL, Config.CITRINEOS_DIRECTUS_LOGIN_EMAIL, Config.CITRINEOS_DIRECTUS_LOGIN_PASSWORD)
+ocpp_integration: OcppIntegration = CitrineOSIntegration(file_integration)
 app.ocpp_integration = ocpp_integration
 @app.on_event("startup")
 async def startup_event():
