@@ -53,6 +53,7 @@ async def stripe_webhook(request: Request, STRIPE_SIGNATURE: str | None = Header
         # Payment was successful, try to start a charging session
         checkout_session = event.get('data').get('object')
         paymentIntentId = checkout_session.get("payment_intent")
+        
         metadata = checkout_session.get('metadata')
         checkoutId = metadata.get("checkoutId")
         stationId = metadata.get("stationId")
@@ -60,22 +61,22 @@ async def stripe_webhook(request: Request, STRIPE_SIGNATURE: str | None = Header
         debug(' [Stripe] stationId: %r, transactionId: %r, checkoutId: %r, paymentIntentId: %r', stationId, transactionId, checkoutId, paymentIntentId)
         
         ocpp_integration: OcppIntegration = request.app.ocpp_integration
+        db_checkout = db.query(CheckoutModel).filter(CheckoutModel.id == checkoutId).first()
+        if db_checkout is None:
+            raise HTTPException(status_code=404, detail="No checkout found for payment intent")
+        db_checkout.authorization_amount = checkout_session.get("amount_total")
         
         if (paymentIntentId and checkoutId and not transactionId):
-            await handle_web_portal(db, ocpp_integration, paymentIntentId, checkoutId)
+            await handle_web_portal(db, ocpp_integration, db_checkout, paymentIntentId)
         elif (paymentIntentId and checkoutId and stationId and transactionId):
-            await handle_scan_and_charge(db, ocpp_integration, paymentIntentId, checkoutId, stationId, transactionId)
+            await handle_scan_and_charge(db, ocpp_integration, db_checkout, paymentIntentId, stationId, transactionId)
         else:
             raise HTTPException(status_code=404, detail="Metadata missing")
         
 
     return
 
-async def handle_web_portal(db: Session, ocpp_integration: OcppIntegration, paymentIntentId: str, checkoutId: str):
-    db_checkout = db.query(CheckoutModel).filter(CheckoutModel.id == checkoutId).first()
-    if db_checkout is None:
-        raise HTTPException(status_code=404, detail="No checkout found for payment intent")
-    
+async def handle_web_portal(db: Session, ocpp_integration: OcppIntegration, db_checkout: CheckoutModel, paymentIntentId: str):
     db_checkout.payment_intent_id = paymentIntentId
     db.add(db_checkout)
     db.commit()
@@ -95,7 +96,7 @@ async def handle_web_portal(db: Session, ocpp_integration: OcppIntegration, paym
 
     idToken = authorization['idToken']
     request_body = {
-        "remoteStartId": checkoutId,
+        "remoteStartId": db_checkout.id,
         "idToken": idToken
     }
     
@@ -120,14 +121,13 @@ async def handle_web_portal(db: Session, ocpp_integration: OcppIntegration, paym
     if response.status_code == 200:
         if response.json().get("success") == True:
             remote_start_stop = RequestStartStopStatusEnumType.ACCEPTED
-    db_checkout = db.query(CheckoutModel).filter(CheckoutModel.id == checkoutId).first()
     db_checkout.remote_request_status = remote_start_stop
 
     db.add(db_checkout)
     db.commit()
     debug(' [Stripe] paymentIntentId: %r, checkoutId: %r, requestStartStatus: %r', db_checkout.payment_intent_id, db_checkout.id, db_checkout.remote_request_status)
 
-async def handle_scan_and_charge(db: Session, ocpp_integration: OcppIntegration, paymentIntentId: str, checkoutId: str, stationId: str, transactionId: str):
+async def handle_scan_and_charge(db: Session, ocpp_integration: OcppIntegration, db_checkout: CheckoutModel, paymentIntentId: str, stationId: str, transactionId: str):
     ocppTransaction = db.query(Transaction) \
         .filter(Transaction.stationId == stationId, 
                 Transaction.transactionId == transactionId) \
@@ -157,7 +157,7 @@ async def handle_scan_and_charge(db: Session, ocpp_integration: OcppIntegration,
     
     idToken = authorization['idToken']
     request_body = {
-        "remoteStartId": checkoutId,
+        "remoteStartId": db_checkout.id,
         "idToken": idToken
     }
     
@@ -174,7 +174,6 @@ async def handle_scan_and_charge(db: Session, ocpp_integration: OcppIntegration,
     if response.status_code == 200:
         if response.json().get("success") == True:
             remote_start_stop = RequestStartStopStatusEnumType.ACCEPTED
-    db_checkout = db.query(CheckoutModel).filter(CheckoutModel.id == checkoutId).first()
     db_checkout.remote_request_status = remote_start_stop
     db_checkout.payment_intent_id = paymentIntentId
     db.add(db_checkout)

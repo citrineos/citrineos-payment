@@ -59,7 +59,7 @@ frontend_routes = ["/", "/checkout/{evse_id}", "/charging/{evse_id}/{checkout_id
 async def serve_frontend(request: Request,):
     return templates.TemplateResponse(
         "index.html", 
-        {"request": request, "CLIENT_API_URL": Config.CLIENT_API_URL,}
+        {"request": request, "CLIENT_API_URL": Config.CLIENT_URL + "/api",}
     )
 for route in frontend_routes:
     app.get(route, response_class=HTMLResponse)(serve_frontend)

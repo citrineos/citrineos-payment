@@ -44,7 +44,7 @@ class OcppIntegration:
                 intent=db_checkout.payment_intent_id,
                 stripe_account=db_operator.stripe_account_id,
                 amount_to_capture=pricing.total_costs_gross,
-                application_fee_amount=pricing.payment_costs_gross,
+                # application_fee_amount=pricing.payment_costs_gross,
         )
         
         if suc_intent.status != 'succeeded':

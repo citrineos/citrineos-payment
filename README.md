@@ -22,8 +22,8 @@ CITRINEOS_DIRECTUS_LOGIN_PASSWORD="CitrineOS!"
 ## CitrineOS Directus QR Code folder - (required for Scan and Charge)
 CITRINEOS_DIRECTUS_QR_CODE_FOLDER="put folder id here"
 
-## API URL which will be used by the frontend application
-CLIENT_API_URL="http://localhost:9010/api"
+## URL which will be used by the frontend application
+CLIENT_URL="http://localhost:9010"
 
 # Message Broker (RabbitMQ)
 ## Protocol of the Message Broker [amqp / amqps] (required)
