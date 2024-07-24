@@ -139,7 +139,7 @@ class CitrineOSIntegration(OcppIntegration):
             if(citrine_os_event.action == CitrineOsEventAction.TRANSACTIONEVENT):
                 citrine_os_event_headers = CitrineOSeventHeaders(**event_message.headers)
                 transaction_event = TransactionEventRequest(**citrine_os_event.payload)
-                if transaction_event.eventType == TransactionEventEnumType.Started:
+                if transaction_event.eventType == TransactionEventEnumType.Started or transaction_event.triggerReason == TriggerReasonEnumType.RemoteStart:
                     await self.process_transaction_started(
                         transaction_event=transaction_event, 
                         citrine_os_event_headers=citrine_os_event_headers
@@ -202,6 +202,7 @@ class CitrineOSIntegration(OcppIntegration):
             connector_id=evse.connectors[0].id,
             tariff_id=tariff.id
         )
+        db_checkout = self.update_checkout_with_meter_values(transaction_event=transaction_event, db_checkout=db_checkout)
         db.add(db_checkout)
         db.commit()
         db.refresh(db_checkout)
@@ -222,6 +223,7 @@ class CitrineOSIntegration(OcppIntegration):
             stripe_price_id=tariff.stripe_price_id, 
             stripe_account_id=location.operator.stripe_account_id, 
             stationId=stationId,
+            evseId=evse.evse_id,
             transactionId=transactionId,
             checkoutId=db_checkout.id
         )
@@ -261,8 +263,14 @@ class CitrineOSIntegration(OcppIntegration):
         db.commit()
         
       
-    async def create_payment_link(self, stripe_price_id: str, stripe_account_id: str, stationId: str, transactionId: str, checkoutId: int) -> str:
+    async def create_payment_link(self, stripe_price_id: str, stripe_account_id: str, stationId: str, evseId: str, transactionId: str, checkoutId: int) -> str:
         transactionPaymentLink = stripe.PaymentLink.create(
+            after_completion = {
+                "redirect": {
+                    "url": f"{Config.CLIENT_URL}/charging/{evseId}/{checkoutId}"
+                },
+                "type": "redirect"
+            },
             line_items=[{
                 "price": stripe_price_id,
                 "quantity": 1,
@@ -295,6 +303,7 @@ class CitrineOSIntegration(OcppIntegration):
         
         db_checkout.transaction_start_time = transaction_event.timestamp
         db_checkout.remote_request_transaction_id = transaction_event.transactionInfo.transactionId
+        db_checkout = self.update_checkout_with_meter_values(transaction_event=transaction_event, db_checkout=db_checkout)
         db.add(db_checkout)
         db.commit()
         db.refresh(db_checkout)
@@ -350,7 +359,11 @@ class CitrineOSIntegration(OcppIntegration):
                             new_kwh_value = new_kwh_value / 1000
                         if sampled_value.unitOfMeasure.multiplier is not None:
                             new_kwh_value = new_kwh_value * 10 ** sampled_value.unitOfMeasure.multiplier
-                        db_checkout.transaction_kwh = new_kwh_value
+                        if db_checkout.transaction_last_meter_reading is None:
+                            db_checkout.transaction_kwh = 0
+                        if db_checkout.transaction_last_meter_reading is not None:
+                            db_checkout.transaction_kwh += new_kwh_value - db_checkout.transaction_last_meter_reading
+                        db_checkout.transaction_last_meter_reading = new_kwh_value
 
                 elif sampled_value.measurand == MeasurandEnumType.PowerActiveImport and \
                     sampled_value.phase == None:

@@ -94,6 +94,7 @@ class Checkout(Base):
 
     id = Column(Integer, primary_key=True, autoincrement="auto", index=True)
     payment_intent_id = Column(String(255), index=True, unique=True)
+    authorization_amount = Column(Float,)
     connector_id = Column(Integer, ForeignKey(f"{Config.DB_TABLE_PREFIX}connectors.id"))
     tariff_id = Column(Integer, ForeignKey(f"{Config.DB_TABLE_PREFIX}tariffs.id"))
     qr_code_message_id = Column(Integer, )
@@ -103,6 +104,7 @@ class Checkout(Base):
     
     transaction_start_time = Column(DateTime(timezone=True),)
     transaction_end_time = Column(DateTime(timezone=True),)
+    transaction_last_meter_reading = Column(Float,)
     transaction_kwh = Column(Float,)
     power_active_import = Column(Float,)
     transaction_soc = Column(Float,)
