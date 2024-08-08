@@ -2,10 +2,6 @@ name: Linter
 
 on:
   pull_request:
-    branches:
-      - main
-      - develop
-      - feature/*
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -47,8 +43,10 @@ jobs:
 
       - name: Install JavaScript dependencies
         if: matrix.language == 'javascript'
+        working-directory: frontend
         run: npm ci
 
       - name: Run ESLint
         if: matrix.language == 'javascript'
+        working-directory: frontend
         run: npm run lint
