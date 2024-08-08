@@ -1,7 +1,7 @@
-
 from pydantic import BaseModel, ConfigDict
 
 from schemas.operators import Operator
+
 
 class LocationBase(BaseModel):
     id: int
@@ -13,10 +13,10 @@ class LocationBase(BaseModel):
     country: str | None
     operator: Operator
 
+
 class LocationCreate(LocationBase):
     pass
 
+
 class Location(LocationBase):
     model_config = ConfigDict(from_attributes=True)
-    
-    

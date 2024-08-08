@@ -2,11 +2,14 @@ import os
 from typing import get_type_hints, Union
 from dotenv import load_dotenv
 
+
 class AppConfigError(Exception):
     pass
 
-def _parse_bool(val: Union[str, bool]) -> bool:  # pylint: disable=E1136 
-    return val if type(val) == bool else val.lower() in ['true', 'yes', '1']
+
+def _parse_bool(val: Union[str, bool]) -> bool:  # pylint: disable=E1136
+    return val if type(val) == bool else val.lower() in ["true", "yes", "1"]
+
 
 # AppConfig class with required fields, default values, type checking, and typecasting for int and bool values
 class AppConfig:
@@ -15,9 +18,9 @@ class AppConfig:
     OPENAPI_TITLE: str = "Stackbox Payment API"
     MESSAGE_BROKER_SSL_ACTIVE: bool
     MESSAGE_BROKER_HOST: str
-    MESSAGE_BROKER_PORT: int    
+    MESSAGE_BROKER_PORT: int
     MESSAGE_BROKER_USER: str
-    MESSAGE_BROKER_PASSWORD: str 
+    MESSAGE_BROKER_PASSWORD: str
     MESSAGE_BROKER_VHOST: str
     MESSAGE_BROKER_EXCHANGE_TYPE: str = "topic"
     MESSAGE_BROKER_EXCHANGE_NAME: str
@@ -49,17 +52,17 @@ class AppConfig:
     CITRINEOS_DIRECTUS_QR_CODE_FOLDER: str
     CLIENT_URL: str
 
-
     """
     Map environment variables to class fields according to these rules:
       - Field won't be parsed unless it has a type annotation
       - Field will be skipped if not in all caps
       - Class field and environment variable name are the same
     """
+
     def __init__(self, env):
         ENV_FILE = ".env"
-        if(env.get('CONFIG_PATH') is not None):
-            ENV_FILE = env.get('CONFIG_PATH')
+        if env.get("CONFIG_PATH") is not None:
+            ENV_FILE = env.get("CONFIG_PATH")
         load_dotenv(dotenv_path=ENV_FILE)
 
         for field in self.__annotations__:
@@ -69,7 +72,7 @@ class AppConfig:
             # Raise AppConfigError if required field not supplied
             default_value = getattr(self, field, None)
             if default_value is None and env.get(field) is None:
-                raise AppConfigError('The {} field is required'.format(field))
+                raise AppConfigError("The {} field is required".format(field))
 
             # Cast env var value to expected type and raise AppConfigError on failure
             try:
@@ -81,15 +84,15 @@ class AppConfig:
 
                 self.__setattr__(field, value)
             except ValueError:
-                raise AppConfigError('Unable to cast value of "{}" to type "{}" for "{}" field'.format(
-                    env[field],
-                    var_type,
-                    field
+                raise AppConfigError(
+                    'Unable to cast value of "{}" to type "{}" for "{}" field'.format(
+                        env[field], var_type, field
+                    )
                 )
-            )
 
     def __repr__(self):
         return str(self.__dict__)
+
 
 # Expose Config object for app to import
 
