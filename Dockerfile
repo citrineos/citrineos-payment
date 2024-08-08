@@ -23,4 +23,4 @@ ENV WEBSERVER_HOST="0.0.0.0"
 ENV WEBSERVER_PORT=9010
 EXPOSE $WEBSERVER_PORT
 
-CMD uvicorn main:app --host "$WEBSERVER_HOST" --port "$WEBSERVER_PORT"
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "9010"]
