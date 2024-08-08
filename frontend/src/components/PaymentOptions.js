@@ -1,16 +1,22 @@
 import * as React from 'react';
-import { Applepay, Googlepay, Visa, Mastercard, Americanexpress } from '@icons-pack/react-simple-icons';
+import {
+  Applepay,
+  Googlepay,
+  Visa,
+  Mastercard,
+  Americanexpress,
+} from '@icons-pack/react-simple-icons';
 
-export default function PaymentOptions({size}) {
+export default function PaymentOptions({ size }) {
   const iconSize = size ? size : 28;
-  return(
+  return (
     <div
       style={{
         display: 'flex',
-        flexDirection: "row",
+        flexDirection: 'row',
         flex: 1,
         justifyContent: 'space-evenly',
-        width: '100%'
+        width: '100%',
       }}
     >
       <Applepay size={iconSize} />
