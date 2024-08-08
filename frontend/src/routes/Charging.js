@@ -1,14 +1,14 @@
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import { ProgressBar, Button } from 'antd-mobile';
+import { Button, ProgressBar } from 'antd-mobile';
 import moment from 'moment';
 
 import axios from '../util/Api.js';
 import getConnectorPowerKw from '../util/ConnectorCalculatePower.js';
 import { getLocationData } from '../util/getLocationData.js';
 
-export default function Charging(props) {
+export default function Charging() {
   const [locData, setLocData] = React.useState({});
   const [state, setState] = React.useState({
     status: 'waiting', // (inital: 'waiting' / 'rejected' / 'charging' / 'closed' / 'error' )
@@ -22,53 +22,29 @@ export default function Charging(props) {
     transaction_soc: null,
     initializing: true,
   });
+
   const navigate = useNavigate();
   const intl = useIntl();
   const { evseId, sessionId } = useParams();
 
-  // Using refreshTimer var to be able to clear it, when manuel refresh is performed
-  let refreshTimer = null;
-  let sessionNotFoundRetryCounter = 0;
+  const refreshTimer = React.useRef(null);
+  const sessionNotFoundRetryCounter = React.useRef(0);
 
-  React.useEffect(() => {
-    if (evseId) {
-      // Get EVSE data
-      axios.get(`evses/${evseId}`).then(async ({ data }) => {
-        // Check if location given
-        if (data.id) {
-          const location_data = await getLocationData(data);
-          setLocationData(location_data);
-        } else {
-          // Do sth when location unknown...
-        }
-      });
-
-      // Query session data in parallel
-      setSessionData();
-    } else {
-      // Navigate to home if no location data is given
-      navigate('/');
-    }
-  }, []);
-
-  const setLocationData = (location) => {
-    setLocData(location);
-  };
-
-  const setSessionData = () => {
+  // Memoize setSessionData to prevent useEffect from being called unnecessarily
+  const setSessionData = React.useCallback(() => {
     axios
       .get(`checkouts/${sessionId}`)
       .then(({ data }) => {
         // Check if session given
         if (data.remote_request_status !== 'Accepted') {
-          setState({ ...state, status: 'rejected' });
+          setState((prevState) => ({ ...prevState, status: 'rejected' }));
         } else if (data.id && data.transaction_start_time) {
           const transaction = { ...data };
           const newState = {
             ...state,
             ...transaction,
             status: 'charging',
-            timestamp: moment().format('DD-MM-YYYY HH:mm:ss'), //Using now() instead of last_updated from MeterValues
+            timestamp: moment().format('DD-MM-YYYY HH:mm:ss'), // Using now() instead of last_updated from MeterValues
           };
 
           // Calculate charging time from transaction data
@@ -93,20 +69,18 @@ export default function Charging(props) {
           }
           setState(newState);
           if (!transaction.transaction_end_time) {
-            refreshTimer = setTimeout(setSessionData, 30 * 1000); // 30s repeat timer, but only if we dont have an end_datetime yet
+            refreshTimer.current = setTimeout(setSessionData, 30 * 1000); // 30s repeat timer, but only if we don't have an end_datetime yet
           }
-          return;
         } else if (data.id && !data.transaction_start_time) {
-          sessionNotFoundRetryCounter++;
-          if (sessionNotFoundRetryCounter <= 3) {
+          sessionNotFoundRetryCounter.current++;
+          if (sessionNotFoundRetryCounter.current <= 3) {
             setTimeout(setSessionData, 5000);
-            return;
           } else {
-            setState({
-              ...state,
+            setState((prevState) => ({
+              ...prevState,
               status: 'error',
               statusMessage: 'charging.error.sessionnotfound',
-            });
+            }));
           }
         } else {
           // Do sth when session unknown...
@@ -115,17 +89,47 @@ export default function Charging(props) {
       })
       .catch((e) => {
         // Set error on error
-        setState({
-          ...state,
+        setState((prevState) => ({
+          ...prevState,
           status: 'error',
           statusMessage: e.response?.data?.detail,
-        });
+        }));
       });
+  }, [sessionId, state]);
+
+  React.useEffect(() => {
+    if (evseId) {
+      // Get EVSE data
+      axios.get(`evses/${evseId}`).then(async ({ data }) => {
+        // Check if location given
+        if (data.id) {
+          const location_data = await getLocationData(data);
+          setLocationData(location_data);
+        } else {
+          // Do sth when location unknown...
+        }
+      });
+
+      // Query session data in parallel
+      setSessionData();
+    } else {
+      // Navigate to home if no location data is given
+      navigate('/');
+    }
+
+    // Cleanup function to clear the timer on component unmount or re-render
+    return () => {
+      clearTimeout(refreshTimer.current);
+    };
+  }, [evseId, navigate, setSessionData]); // Ensure setSessionData is stable by using useCallback
+
+  const setLocationData = (location) => {
+    setLocData(location);
   };
 
   const onRefresh = () => {
     // On manual refresh clear timer and trigger session update which creates new timer
-    clearTimeout(refreshTimer);
+    clearTimeout(refreshTimer.current);
     setSessionData();
   };
 
@@ -135,7 +139,7 @@ export default function Charging(props) {
     secs = secs % 3600;
     const mins = secs / 60;
     secs = secs % 60;
-    return `${parseInt(hours)}:${parseInt(mins) < 10 ? `0${parseInt(mins)}` : parseInt(mins)}:${secs < 10 ? `0${parseInt(secs)}` : secs}`;
+    return `${parseInt(hours, 10)}:${parseInt(mins, 10) < 10 ? `0${parseInt(mins, 10)}` : parseInt(mins, 10)}:${secs < 10 ? `0${parseInt(secs, 10)}` : parseInt(secs, 10)}`;
   };
 
   return (

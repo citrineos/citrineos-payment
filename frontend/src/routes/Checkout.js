@@ -1,8 +1,8 @@
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import { Card, Button, Checkbox } from 'antd-mobile';
-import { Skeleton, Modal } from 'antd';
+import { Button, Card, Checkbox } from 'antd-mobile';
+import { Modal, Skeleton } from 'antd';
 
 import PaymentCardImg from '../assets/images/Payment_page_card.png';
 import PaymentOptions from '../components/PaymentOptions.js';
@@ -17,7 +17,7 @@ const currencies = {
   USD: '$',
 };
 
-export default function Checkout(props) {
+export default function Checkout() {
   const [state, setState] = React.useState({
     power_type: null,
     max_voltage: null,
@@ -42,6 +42,13 @@ export default function Checkout(props) {
   const { evseId } = useParams();
 
   React.useEffect(() => {
+    const setLocationData = (location) => {
+      setState((prevState) => ({
+        ...prevState,
+        ...location,
+        initializing: false,
+      }));
+    };
     if (evseId) {
       axios
         .get(`evses/${evseId}`)
@@ -70,7 +77,7 @@ export default function Checkout(props) {
             });
           }
         })
-        .catch((e) => {
+        .catch(() => {
           // Navigate to home with error
           navigate('/', {
             state: { evseId: evseId, errMsg: 'global.error.generic' },
@@ -80,13 +87,9 @@ export default function Checkout(props) {
       // Navigate to home if no location data is given
       navigate('/');
     }
-  }, []);
+  }, [evseId, navigate]);
 
-  const setLocationData = (location) => {
-    setState({ ...state, ...location, initializing: false });
-  };
-
-  const onCheckout = (e) => {
+  const onCheckout = () => {
     setState({ ...state, errMsg: null });
 
     // Check if TA accepted, if not show error
@@ -110,14 +113,15 @@ export default function Checkout(props) {
         // Check if checkout given,
         if (data?.url) {
           window.location.replace(data.url);
-        } else
+        } else {
           setState({
             ...state,
             loading: false,
             errMsg: intl.formatMessage({ id: 'global.error.generic' }),
           });
+        }
       })
-      .catch((e) => {
+      .catch(() => {
         setState({
           ...state,
           loading: false,

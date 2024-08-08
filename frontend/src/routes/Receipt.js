@@ -6,10 +6,10 @@ import moment from 'moment';
 
 import axios from '../util/Api.js';
 
-const Receipt = (props) => {
+const Receipt = () => {
   const [receiptData, setReceiptData] = React.useState(null);
   const [ocmfData, setOcmfData] = React.useState(null);
-  const { evseId, sessionId } = useParams();
+  const { sessionId } = useParams();
   const intl = useIntl();
 
   // Get the session data on load
@@ -21,8 +21,8 @@ const Receipt = (props) => {
           const transaction_data = data?.data?.session?.transaction_data;
           if (transaction_data) {
             try {
-              transaction_data.forEach((transacionData, i) => {
-                transacionData.sampled_value.forEach((sampledValue, iS) => {
+              transaction_data.forEach((transacionData) => {
+                transacionData.sampled_value.forEach((sampledValue) => {
                   if (sampledValue.format === 'SignedData') {
                     // searching for signeddata
                     const match = /(4f434d46{1}.*)/g.exec(sampledValue.value);
@@ -47,7 +47,9 @@ const Receipt = (props) => {
               const rx =
                 /("sampled_value": \[{"value": ")(OCMF\|{1}.*\|{1}.*{"SD":"{1}.*"})(",)/g;
               const match = rx.exec(tdata);
-              if (match) setOcmfData(match[2]);
+              if (match) {
+                setOcmfData(match[2]);
+              }
             }
           }
           setReceiptData(data.data);
@@ -56,7 +58,7 @@ const Receipt = (props) => {
         }
       });
     }
-  }, []);
+  }, [sessionId]);
 
   const downloadOcmfFile = () => {
     const element = document.createElement('a');
@@ -77,7 +79,7 @@ const Receipt = (props) => {
           <div className="receipt-header-row-subtitle">SCAN - PAY - CHARGE</div>
         </div>
         <div className="receipt-content-container">
-          <Skeleton active loading={false /*!sessionData*/}>
+          <Skeleton active loading={false /* !sessionData*/}>
             <div>
               <p>
                 <b>{intl.formatMessage({ id: 'receipt.sessiondetails' })}:</b>
