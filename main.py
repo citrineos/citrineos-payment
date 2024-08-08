@@ -1,20 +1,18 @@
-import json
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from requests import Session
 from api.api import api_router
 from asyncio import get_event_loop
 from config import Config
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from logging import basicConfig, debug
+from logging import basicConfig
 from integrations.directus.directus import DirectusIntegration
 from integrations.citrineos.citrineos import CitrineOSIntegration
 from uvicorn import run
 import stripe
 
-from db.init_db import Transaction, get_db, init_db
+from db.init_db import init_db
 from integrations.integration import FileIntegration, OcppIntegration
 
 basicConfig(format=Config.LOG_FORMAT, level=Config.LOG_LEVEL)

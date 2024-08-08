@@ -159,7 +159,7 @@ async def handle_web_portal(
     )
     remote_start_stop = RequestStartStopStatusEnumType.REJECTED
     if response.status_code == 200:
-        if response.json().get("success") == True:
+        if response.json().get("success"):
             remote_start_stop = RequestStartStopStatusEnumType.ACCEPTED
     db_checkout.remote_request_status = remote_start_stop
 
@@ -236,7 +236,7 @@ async def handle_scan_and_charge(
     )
     remote_start_stop = RequestStartStopStatusEnumType.REJECTED
     if response.status_code == 200:
-        if response.json().get("success") == True:
+        if response.json().get("success"):
             remote_start_stop = RequestStartStopStatusEnumType.ACCEPTED
     db_checkout.remote_request_status = remote_start_stop
     db_checkout.payment_intent_id = paymentIntentId

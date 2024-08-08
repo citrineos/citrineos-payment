@@ -2,7 +2,6 @@ from enum import Enum
 from io import BytesIO
 import json
 from typing import List, Tuple
-from uuid import uuid4
 from aio_pika import connect
 from aio_pika.abc import AbstractExchange, AbstractIncomingMessage
 from fastapi import FastAPI
@@ -19,14 +18,12 @@ from db.init_db import (
     MessageInfo as MessageInfoModel,
     get_db,
     Checkout as CheckoutModel,
-    Connector as ConnectorModel,
     Evse as EvseModel,
     Location as LocationModel,
     Tariff as TariffModel,
 )
 
 from integrations.integration import FileIntegration, OcppIntegration
-from schemas.checkouts import RequestStartStopStatusEnumType
 from schemas.status_notification import StatusNotificationRequest
 from schemas.transaction_event import (
     MeasurandEnumType,
@@ -164,7 +161,7 @@ class CitrineOSIntegration(OcppIntegration):
                             " [CitrineOS] Event processed successfully: %r",
                             message.headers.__str__(),
                         )
-                except Exception as e:
+                except Exception:
                     exception(" [CitrineOS] Processing error for message %r", message)
 
     async def process_incoming_event(
@@ -478,7 +475,7 @@ class CitrineOSIntegration(OcppIntegration):
         self, transaction_event: TransactionEventRequest, db_checkout: CheckoutModel
     ) -> CheckoutModel:
         if (
-            transaction_event.meterValue != None
+            transaction_event.meterValue is not None
             and len(transaction_event.meterValue) > 0
         ):
             latest_meter_value = transaction_event.meterValue[
@@ -488,7 +485,7 @@ class CitrineOSIntegration(OcppIntegration):
                 if (
                     sampled_value.measurand
                     == MeasurandEnumType.EnergyActiveImportRegister
-                    and sampled_value.phase == None
+                    and sampled_value.phase is None
                 ):
                     new_kwh_value = sampled_value.value
                     if (
@@ -510,7 +507,7 @@ class CitrineOSIntegration(OcppIntegration):
 
                 elif (
                     sampled_value.measurand == MeasurandEnumType.PowerActiveImport
-                    and sampled_value.phase == None
+                    and sampled_value.phase is None
                 ):
                     new_power_value = sampled_value.value
                     if (
@@ -526,7 +523,7 @@ class CitrineOSIntegration(OcppIntegration):
 
                 elif (
                     sampled_value.measurand == MeasurandEnumType.SoC
-                    and sampled_value.phase == None
+                    and sampled_value.phase is None
                 ):
                     new_soc_value = sampled_value.value
                     if sampled_value.unitOfMeasure.multiplier is not None:
