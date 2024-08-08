@@ -29,12 +29,9 @@ export default function App() {
   }
 
   // get the current locale and return the corresponding translation file
-  const getCurrentTranslation: (locale: string) =>
-    | Record<string, string>
-    | Record<string, MessageFormatElement[]>
-    | undefined = (locale) => {
+  const getCurrentTranslation = (locale) => {
     const language = locale.split(/[-_]/)[0];
-    const messages = translations[language] ?? translations['en']; //fallback
+    const messages = translations[language] || translations['en']; // fallback
     return messages;
   };
 
