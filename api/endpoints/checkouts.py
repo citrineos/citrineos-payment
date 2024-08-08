@@ -1,4 +1,3 @@
-from datetime import datetime
 import stripe
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -11,7 +10,7 @@ from db.init_db import (
     Checkout as CheckoutModel,
 )
 
-from schemas.checkouts import Checkout, CheckoutCreate, CheckoutCreateResponse, Pricing
+from schemas.checkouts import Checkout, CheckoutCreate, CheckoutCreateResponse
 from utils.utils import generate_pricing
 
 router = APIRouter()

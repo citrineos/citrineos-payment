@@ -7,7 +7,6 @@ import stripe
 from sqlalchemy.orm import Session
 
 from db.init_db import get_db, Checkout, Connector, Evse, Location, Operator
-from schemas.checkouts import RequestStartStopStatusEnumType
 from utils.utils import generate_pricing
 
 

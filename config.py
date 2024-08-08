@@ -8,7 +8,7 @@ class AppConfigError(Exception):
 
 
 def _parse_bool(val: Union[str, bool]) -> bool:  # pylint: disable=E1136
-    return val if type(val) == bool else val.lower() in ["true", "yes", "1"]
+    return val if isinstance(val,bool) else val.lower() in ["true", "yes", "1"]
 
 
 # AppConfig class with required fields, default values, type checking, and typecasting for int and bool values
@@ -77,7 +77,7 @@ class AppConfig:
             # Cast env var value to expected type and raise AppConfigError on failure
             try:
                 var_type = get_type_hints(AppConfig)[field]
-                if var_type == bool:
+                if var_type is bool:
                     value = _parse_bool(env.get(field, default_value))
                 else:
                     value = var_type(env.get(field, default_value))
