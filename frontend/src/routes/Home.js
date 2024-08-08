@@ -9,7 +9,6 @@ import PaymentOptions from '../components/PaymentOptions.js';
 
 export default function Home() {
   const [form] = Form.useForm();
-  const { evseId, message } = { evseId: null, message: null };
   const intl = useIntl();
   const navigate = useNavigate();
   const location = useLocation();
@@ -26,7 +25,7 @@ export default function Home() {
         },
       ]);
     }
-  }, []);
+  }, [form, intl, location]);
 
   const onFinish = (values) => {
     axios
