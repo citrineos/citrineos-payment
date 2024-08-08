@@ -7,6 +7,7 @@ from schemas.tariffs import Tariff
 
 router = APIRouter()
 
+
 @router.get("/{id}", response_model=Tariff)
 def get_tariff(id: int, db: Session = Depends(get_db)):
     db_location = db.query(TariffModel).filter(TariffModel.id == id).first()

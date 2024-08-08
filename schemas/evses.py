@@ -3,6 +3,7 @@ from pydantic import BaseModel, ConfigDict
 
 from schemas.connectors import Connector
 
+
 class EvseStatus(str, Enum):
     Available = "Available"
     Occupied = "Occupied"
@@ -20,4 +21,3 @@ class Evse(BaseModel):
     status: EvseStatus
     location_id: int
     connectors: list[Connector] = []
-    

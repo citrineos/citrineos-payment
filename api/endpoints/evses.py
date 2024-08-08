@@ -7,10 +7,7 @@ from schemas.evses import Evse as EvseSchema
 router = APIRouter()
 
 
-@router.get(
-    "/{evse_id}", 
-    response_model=EvseSchema
-)
+@router.get("/{evse_id}", response_model=EvseSchema)
 async def read_evses(evse_id: str, db: Session = Depends(get_db)):
     evse = db.query(EvseModel).filter(EvseModel.evse_id == evse_id).first()
     if evse is None:
