@@ -6,13 +6,16 @@
 @font-face {
   font-family: 'montserrat';
   src:
-  url("../assets/fonts/montserrat/montserrat-v15-latin-regular.woff") format('woff'),
-  url('../assets/fonts/montserrat/montserrat-v15-latin-regular.woff2') format('woff2');
+    url('../assets/fonts/montserrat/montserrat-v15-latin-regular.woff')
+      format('woff'),
+    url('../assets/fonts/montserrat/montserrat-v15-latin-regular.woff2')
+      format('woff2');
   font-weight: 400;
   font-style: normal;
 }
 
-html, body {
+html,
+body {
   width: 100%;
   height: 100%;
 }
@@ -36,9 +39,16 @@ body {
   flex-grow: 1;
 }
 
-.div-with-margin {margin-top: 10px; margin-bottom: 10px;}
-.text-align-center {text-align: center;}
-.width-100 {width: 100%;}
+.div-with-margin {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+.text-align-center {
+  text-align: center;
+}
+.width-100 {
+  width: 100%;
+}
 
 .page-container {
   display: flex;
@@ -48,13 +58,15 @@ body {
   color: white;
 }
 
-.page-container-home { padding: 50px; margin-top: -50px }
+.page-container-home {
+  padding: 50px;
+  margin-top: -50px;
+}
 .page-container-home h1 {
   font-weight: bold;
   margin: 0;
   color: white !important;
 }
-
 
 .checkout-top-container {
   width: 100%;
@@ -67,7 +79,10 @@ body {
   display: flex;
   width: 96%;
 }
-.checkout-detail-icon {width: 40px;  padding-left: 15px;}
+.checkout-detail-icon {
+  width: 40px;
+  padding-left: 15px;
+}
 .checkout-pricing-line-wrapper {
   display: flex;
   justify-content: space-between;
@@ -89,19 +104,22 @@ body {
   align-items: center;
 }
 
-
 .charging-info-block {
   display: flex;
   justify-content: space-between;
-  border-top: 1px solid rgba(255, 255, 255, .5);
+  border-top: 1px solid rgba(255, 255, 255, 0.5);
   padding: 20px 0 0 0;
 }
-.charging-incl-vat {font-size: 16px;}
+.charging-incl-vat {
+  font-size: 16px;
+}
 
-
-.adm-button {border-radius: 20px !important;}
-.ant-col-0 {display: none !important;} /* fixing issue */
-
+.adm-button {
+  border-radius: 20px !important;
+}
+.ant-col-0 {
+  display: none !important;
+} /* fixing issue */
 
 .receipt-main-container {
   width: 100vw;
@@ -124,7 +142,9 @@ body {
   font-size: 20px;
   font-weight: bold;
 }
-.receipt-header-row-subtitle {padding-right: 30px;}
+.receipt-header-row-subtitle {
+  padding-right: 30px;
+}
 
 .receipt-content-container {
   border: 1px solid var(--receipt-borders);
@@ -132,20 +152,30 @@ body {
   padding: 10px;
   font-size: 14px;
 }
-.receipt-content-container table { width: 100%; }
+.receipt-content-container table {
+  width: 100%;
+}
 .receipt-content-container td {
   border: 1px solid var(--receipt-borders);
   padding: 5px;
 }
-.receipt-content-container td { text-align: right; }
-.receipt-content-container td:nth-Child(1) { text-align: left; }
-.receipt-content-container thead, .receipt-content-container tfoot tr:nth-Child(1), 
-.receipt-content-container thead, .receipt-content-container tfoot tr:nth-Child(3), 
-.receipt-content-container thead, .receipt-content-container tfoot tr:nth-Child(5)
-{ font-weight: bold;}
+.receipt-content-container td {
+  text-align: right;
+}
+.receipt-content-container td:nth-child(1) {
+  text-align: left;
+}
+.receipt-content-container thead,
+.receipt-content-container tfoot tr:nth-child(1),
+.receipt-content-container thead,
+.receipt-content-container tfoot tr:nth-child(3),
+.receipt-content-container thead,
+.receipt-content-container tfoot tr:nth-child(5) {
+  font-weight: bold;
+}
 
 .receipt-footer-row {
-  background-color: var(--ampay-blue);;
+  background-color: var(--ampay-blue);
   color: white;
   padding: 10px;
   font-size: 14px;
