@@ -2,7 +2,7 @@ aio-pika==8.2.4
 aiormq==6.4.2
 annotated-types==0.6.0
 anyio==3.7.1
-certifi==2022.12.7
+certifi==2024.7.4
 charset-normalizer==3.0.1
 click==8.1.7
 exceptiongroup==1.2.0
