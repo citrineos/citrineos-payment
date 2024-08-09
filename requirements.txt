@@ -28,6 +28,6 @@ sqlmodel==0.0.14
 starlette==0.27.0
 stripe==5.2.0
 typing_extensions==4.8.0
-urllib3==1.26.14
+urllib3==1.26.19
 uvicorn==0.20.0
 yarl==1.8.2
