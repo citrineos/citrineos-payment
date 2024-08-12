@@ -8,7 +8,7 @@ class AppConfigError(Exception):
 
 
 def _parse_bool(val: Union[str, bool]) -> bool:  # pylint: disable=E1136
-    return val if isinstance(val,bool) else val.lower() in ["true", "yes", "1"]
+    return val if isinstance(val, bool) else val.lower() in ["true", "yes", "1"]
 
 
 # AppConfig class with required fields, default values, type checking, and typecasting for int and bool values
