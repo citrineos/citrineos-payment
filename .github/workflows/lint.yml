@@ -1,0 +1,52 @@
+name: Linter
+
+on:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint Codebase
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        language: [python, javascript]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Setup and lint Python code
+      - name: Setup Python
+        if: matrix.language == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        if: matrix.language == 'python'
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Run Ruff
+        if: matrix.language == 'python'
+        run: ruff check --output-format=github .
+      # Setup and lint JavaScript code
+      - name: Setup Node.js
+        if: matrix.language == 'javascript'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install JavaScript dependencies
+        if: matrix.language == 'javascript'
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run ESLint
+        if: matrix.language == 'javascript'
+        working-directory: frontend
+        run: npm run lint

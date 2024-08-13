@@ -6,9 +6,10 @@ class OperatorBase(BaseModel):
     name: str
     # Add other fields as needed
 
+
 class OperatorCreate(OperatorBase):
     pass
 
+
 class Operator(OperatorBase):
     model_config = ConfigDict(from_attributes=True)
-    

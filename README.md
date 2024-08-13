@@ -76,10 +76,31 @@ DB_TABLE_PREFIX="payment_"
 (container contains Stackbox' test api key)
 STRIPE_API_KEY="sk_test_some-stripe-api-key"
 
-## Stripe endpoint secrect for receiving webhooks from Stripe for endpoint-type "Account" (required)
+## Stripe endpoint secret for receiving webhooks from Stripe for endpoint-type "Account" (required)
 (Webhook needs to be configured with stripe and given secret needs to be used)
 STRIPE_ENDPOINT_SECRET_ACCOUNT="whsec_some-stripe-signing-secret"
 
-## Stripe endpoint secrect for receiving webhooks from Stripe for endpoint-type "Connect" (required)
+## Stripe endpoint secret for receiving webhooks from Stripe for endpoint-type "Connect" (required)
 (Webhook needs to be configured with stripe and given secret needs to be used)
 STRIPE_ENDPOINT_SECRET_CONNECT="whsec_some-stripe-signing-secret"
+
+# Development Setup
+
+To set up your development environment, run the following commands:
+
+```bash
+./deploy_local.sh
+```
+
+## Code Style
+
+We use [Ruff](https://docs.astral.sh/ruff/) to lint and format our code.
+
+To run the formatter, run the following command:
+```bash
+ruff format
+```
+To run the linter, run the following command:
+```bash
+ruff check
+```

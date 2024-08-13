@@ -32,8 +32,8 @@ class Pricing(BaseModel):
     time_costs: int | None = None
     session_consumption: int | None = None
     session_costs: int | None = None
-    payment_costs_tax_rate: int = 0     # Used for tax reverse charge scenarios
-    
+    payment_costs_tax_rate: int = 0  # Used for tax reverse charge scenarios
+
     @computed_field
     @property
     def total_costs_net(self) -> int:
@@ -45,18 +45,27 @@ class Pricing(BaseModel):
         if self.session_costs is not None:
             result += self.session_costs
         return result
+
     @computed_field
     @property
     def tax_costs(self) -> int:
         return int(self.total_costs_net * self.tax_rate / 100)
+
     @computed_field
     @property
     def total_costs_gross(self) -> int:
         return int(self.total_costs_net + self.tax_costs)
+
     @computed_field
     @property
     def payment_costs_gross(self) -> int:
-        return int(self.total_costs_net * (1 + self.payment_costs_tax_rate / 100) * self.payment_fee / 100)
+        return int(
+            self.total_costs_net
+            * (1 + self.payment_costs_tax_rate / 100)
+            * self.payment_fee
+            / 100
+        )
+
     @computed_field
     @property
     def payment_costs_net(self) -> int:
@@ -77,4 +86,3 @@ class Checkout(CheckoutBase):
     power_active_import: float | None
     transaction_soc: float | None
     pricing: Pricing | None
-    
