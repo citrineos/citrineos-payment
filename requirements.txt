@@ -1,6 +1,6 @@
 aio-pika==8.3.0
 aiormq==6.6.3
-annotated-types==0.6.0
+annotated-types==0.7.0
 anyio==3.7.1
 certifi==2024.7.4
 charset-normalizer==3.0.1
