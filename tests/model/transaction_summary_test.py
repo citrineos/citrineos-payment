@@ -1,217 +1,135 @@
-import os
 import unittest
-from contextlib import contextmanager
-from datetime import datetime
-from unittest.mock import MagicMock, Mock, patch
+from datetime import datetime, timezone
+from unittest.mock import patch
 
-os.environ.setdefault("CONFIG_PATH", ".env.test")
-
-from db.init_db import Checkout, Tariff
-from utils.utils import generate_pricing
+from model.transaction_summary import TransactionSummary
+from moneyed import Money
+from decimal import Decimal
 
 
-class GeneratePricingTests(unittest.TestCase):
-    def test_pricing_has_currency(self):
-        for tariff, expected_currency in [
-            (a_tariff(currency="USD"), "USD"),
-            (a_tariff(currency="EUR"), "EUR"),
-            (a_tariff(currency="CAD"), "CAD"),
-            (a_tariff(currency="GBP"), "GBP"),
-        ]:
-            with self.subTest(expected_currency=expected_currency):
-                checkout = a_checkout(tariff_id=tariff.id)
-
-                with model_data({Checkout: checkout, Tariff: tariff}):
-                    pricing = generate_pricing(checkout.id)
-                    self.assertEqual(pricing.currency, expected_currency)
-
-    def test_pricing_has_tax_rate(self):
-        for tariff, expected_tax_rate in [  # TODO: fix type mismatch
-            (a_tariff(tax_rate=1), 1),
-            (a_tariff(tax_rate=2), 2),
-            (a_tariff(tax_rate=5), 5),
-            (a_tariff(tax_rate=23), 23),
-        ]:
-            with self.subTest(expected_tax_rate=expected_tax_rate):
-                checkout = a_checkout(tariff_id=tariff.id)
-
-                with model_data({Checkout: checkout, Tariff: tariff}):
-                    pricing = generate_pricing(checkout.id)
-                    self.assertEqual(pricing.tax_rate, expected_tax_rate)
-
-    def test_pricing_has_payment_fee(self):
-        for tariff, expected_payment_fee in [  # TODO: fix type mismatch
-            (a_tariff(payment_fee=1), 1),
-            (a_tariff(payment_fee=2), 2),
-            (a_tariff(payment_fee=5), 5),
-            (a_tariff(payment_fee=23), 23),
-        ]:
-            with self.subTest(expected_payment_fee=expected_payment_fee):
-                checkout = a_checkout(tariff_id=tariff.id)
-
-                with model_data({Checkout: checkout, Tariff: tariff}):
-                    pricing = generate_pricing(checkout.id)
-                    self.assertEqual(pricing.payment_fee, expected_payment_fee)
-
-    def test_pricing_has_energy_consumption_kwh(self):
-        tariff = a_tariff()
-        for checkout, expected_energy_consumption in [
-            (a_checkout(tariff_id=tariff.id, transaction_kwh=0), 0),
-            (a_checkout(tariff_id=tariff.id, transaction_kwh=0.01), 0.01),
-            (a_checkout(tariff_id=tariff.id, transaction_kwh=0.00001), 0.00001),
-            (a_checkout(tariff_id=tariff.id, transaction_kwh=0.99999), 0.99999),
-            (a_checkout(tariff_id=tariff.id, transaction_kwh=1), 1),
-            (a_checkout(tariff_id=tariff.id, transaction_kwh=10.23), 10.23),
-            (a_checkout(tariff_id=tariff.id, transaction_kwh=39.99), 39.99),
-        ]:
-            with self.subTest(
-                transaction_kwh=checkout.transaction_kwh,
-                expected_energy_consumption=expected_energy_consumption,
-            ):
-                with model_data({Checkout: checkout, Tariff: tariff}):
-                    pricing = generate_pricing(checkout.id)
-                    self.assertEqual(
-                        pricing.energy_consumption_kwh, expected_energy_consumption
-                    )
-
-    def test_pricing_has_energy_costs_in_currency_sub_units(self):
+class TransactionSummaryTests(unittest.TestCase):
+    def test_energy_costs(self):
         currency = "USD"
         for price_kwh, kwh, expected_energy_costs in [
-            (0.09, 20, 180),  # 1.80
-            (0.14, 20, 280),  # 2.80
-            (0.23, 20, 460),  # 4.60
-            (0.25, 20, 500),  # 5.00
-            (0.47, 20, 940),  # 9.40
-            (0.61, 20, 1220),  # 12.20
-            (0.69, 20, 1380),  # 13.80
-            (0.09, 23.54, 211),  # 2.1186
-            (0.14, 23.54, 329),  # 3.2956
-            (0.23, 23.54, 541),  # 5.4142
-            (0.25, 23.54, 588),  # 5.885
-            (0.47, 23.54, 1106),  # 11.0638
-            (0.61, 23.54, 1435),  # 14.3594
-            (0.69, 23.54, 1624),  # 16.2426
-            (0.09, 39.99, 359),  # 3.5991
-            (0.14, 39.99, 559),  # 5.5986
-            (0.23, 39.99, 919),  # 9.1977
-            (0.25, 39.99, 999),  # 9.9975
-            (0.47, 39.99, 1879),  # 18.7953
-            (0.61, 39.99, 2439),  # 24.3939
-            (0.69, 39.99, 2759),  # 27.5931
-            (0.092, 41.784, 384),  # 3.844128
-            (0.145, 41.784, 605),  # 6.05868
-            (0.231, 41.784, 965),  # 9.652104
-            (0.254, 41.784, 1061),  # 10.613136
-            (0.479, 41.784, 2001),  # 20.014536
-            (0.617, 41.784, 2578),  # 25.780728
-            (0.699, 41.784, 2920),  # 29.207016
-            (1, 9.512, 951),  # 9.512
-            (1, 12.421, 1242),  # 12.421
-            (1, 16.765, 1676),  # 16.765
-            (1, 21.517, 2151),  # 21.517
-            (1, 26.214, 2621),  # 26.214
-            (1, 31.431, 3143),  # 31.431
-            (1, 43.589, 4358),  # 43.589
+            (0.09, 20, Money(amount="1.80", currency=currency)),
+            (0.14, 20, Money(amount="2.80", currency=currency)),
+            (0.23, 20, Money(amount="4.60", currency=currency)),
+            (0.25, 20, Money(amount="5.00", currency=currency)),
+            (0.47, 20, Money(amount="9.40", currency=currency)),
+            (0.61, 20, Money(amount="12.20", currency=currency)),
+            (0.69, 20, Money(amount="13.80", currency=currency)),
+            (0.09, 23.54, Money(amount="2.1186", currency=currency)),
+            (0.14, 23.54, Money(amount="3.2956", currency=currency)),
+            (0.23, 23.54, Money(amount="5.4142", currency=currency)),
+            (0.25, 23.54, Money(amount="5.885", currency=currency)),
+            (0.47, 23.54, Money(amount="11.0638", currency=currency)),
+            (0.61, 23.54, Money(amount="14.3594", currency=currency)),
+            (0.69, 23.54, Money(amount="16.2426", currency=currency)),
+            (0.09, 39.99, Money(amount="3.5991", currency=currency)),
+            (0.14, 39.99, Money(amount="5.5986", currency=currency)),
+            (0.23, 39.99, Money(amount="9.1977", currency=currency)),
+            (0.25, 39.99, Money(amount="9.9975", currency=currency)),
+            (0.47, 39.99, Money(amount="18.7953", currency=currency)),
+            (0.61, 39.99, Money(amount="24.3939", currency=currency)),
+            (0.69, 39.99, Money(amount="27.5931", currency=currency)),
+            (0.092, 41.784, Money(amount="3.844128", currency=currency)),
+            (0.145, 41.784, Money(amount="6.05868", currency=currency)),
+            (0.231, 41.784, Money(amount="9.652104", currency=currency)),
+            (0.254, 41.784, Money(amount="10.613136", currency=currency)),
+            (0.479, 41.784, Money(amount="20.014536", currency=currency)),
+            (0.617, 41.784, Money(amount="25.780728", currency=currency)),
+            (0.699, 41.784, Money(amount="29.207016", currency=currency)),
+            (1, 9.512, Money(amount="9.512", currency=currency)),
+            (1, 12.421, Money(amount="12.421", currency=currency)),
+            (1, 16.765, Money(amount="16.765", currency=currency)),
+            (1, 21.517, Money(amount="21.517", currency=currency)),
+            (1, 26.214, Money(amount="26.214", currency=currency)),
+            (1, 31.431, Money(amount="31.431", currency=currency)),
+            (1, 43.589, Money(amount="43.589", currency=currency)),
         ]:
             with self.subTest(
                 price_kwh=price_kwh,
                 kwh=kwh,
                 expected_energy_costs=expected_energy_costs,
             ):
-                tariff = a_tariff(price_kwh=price_kwh, currency=currency)
-                checkout = a_checkout(tariff_id=tariff.id, transaction_kwh=kwh)
+                summary = a_transaction_summary(
+                    kwh=kwh, currency=currency, price_kwh=price_kwh
+                )
+                self.assertEqual(summary.energy_costs, expected_energy_costs)
 
-                with model_data({Checkout: checkout, Tariff: tariff}):
-                    pricing = generate_pricing(checkout.id)
-                    self.assertEqual(pricing.energy_costs, expected_energy_costs)
+    def test_no_energy_costs_when_missing_transaction_kwh(self):
+        summary = a_transaction_summary(kwh=None, price_kwh=0.43)
+        self.assertIsNone(summary.energy_costs)
 
-    def test_pricing_has_no_energy_costs_when_missing_transaction_kwh(self):
-        tariff = a_tariff(price_kwh=0.43)
-        checkout = a_checkout(tariff_id=tariff.id, transaction_kwh=None)
+    def test_no_energy_costs_when_missing_price_kwh(self):
+        summary = a_transaction_summary(kwh=39.99, price_kwh=None)
+        self.assertIsNone(summary.energy_costs)
 
-        with model_data({Checkout: checkout, Tariff: tariff}):
-            pricing = generate_pricing(checkout.id)
-            self.assertIsNone(pricing.energy_costs)
+    def test_no_energy_costs_when_missing_transaction_kwh_and_price_kwh(self):
+        summary = a_transaction_summary(kwh=None, price_kwh=None)
+        self.assertIsNone(summary.energy_costs)
 
-    def test_pricing_has_no_energy_costs_when_missing_price_kwh(self):
-        tariff = a_tariff(price_kwh=None)
-        checkout = a_checkout(tariff_id=tariff.id, transaction_kwh=39.99)
-
-        with model_data({Checkout: checkout, Tariff: tariff}):
-            pricing = generate_pricing(checkout.id)
-            self.assertIsNone(pricing.energy_costs)
-
-    def test_pricing_has_no_energy_costs_when_missing_transaction_kwh_and_price_kwh(
-        self,
-    ):
-        tariff = a_tariff(price_kwh=None)
-        checkout = a_checkout(tariff_id=tariff.id, transaction_kwh=None)
-
-        with model_data({Checkout: checkout, Tariff: tariff}):
-            pricing = generate_pricing(checkout.id)
-            self.assertIsNone(pricing.energy_costs)
-
-    def test_pricing_has_time_consumption_min(self):
+    def test_time_consumption_min(self):
         for start_time, end_time, expected_time_consumption_min in [
             (
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 0, 0),
-                0,
+                Decimal("0"),
             ),
             (
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 0, 1),
-                0.01666666666666666666666666667,
+                Decimal("0.01666666666666666666666666667"),
             ),
             (
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 0, 59),
-                0.9833333333333333333333333333,
+                Decimal("0.9833333333333333333333333333"),
             ),
             (
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 1, 0),
-                1,
+                Decimal("1"),
             ),
             (
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 20, 0),
-                20,
+                Decimal("20"),
             ),
             (
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                59.98333333333333333333333333,
+                Decimal("59.98333333333333333333333333"),
             ),
             (
                 datetime(2024, 8, 15, 23, 50, 59),
                 datetime(2024, 8, 16, 0, 20, 34),
-                29.58333333333333333333333333,
+                Decimal("29.58333333333333333333333333"),
             ),
             (
                 datetime(2024, 8, 15, 23, 59, 59),
                 datetime(2024, 8, 16, 0, 0, 0),
-                0.01666666666666666666666666667,
+                Decimal("0.01666666666666666666666666667"),
             ),
             (
                 datetime(2024, 8, 15, 0, 0, 0),
                 datetime(2024, 8, 15, 23, 59, 59),
-                1439.983333333333333333333333,
+                Decimal("1439.983333333333333333333333"),
             ),
             (
                 datetime(2024, 8, 15, 0, 0, 0),
                 datetime(2024, 8, 16, 0, 0, 0),
-                1440,
+                Decimal("1440"),
             ),
             (
                 datetime(2024, 8, 15, 0, 0, 0),
                 datetime(2024, 8, 18, 0, 0, 0),
-                4320,
+                Decimal("4320"),
             ),
             (
                 datetime(2024, 12, 31, 23, 59, 59),
                 datetime(2025, 1, 1, 0, 0, 1),
-                0.03333333333333333333333333333,
+                Decimal("0.03333333333333333333333333333"),
             ),
         ]:
             with self.subTest(
@@ -219,148 +137,211 @@ class GeneratePricingTests(unittest.TestCase):
                 end_time=end_time,
                 expected_time_consumption_min=expected_time_consumption_min,
             ):
-                tariff = a_tariff()
-                checkout = a_checkout(
-                    tariff_id=tariff.id,
-                    transaction_start_time=start_time,
-                    transaction_end_time=end_time,
+                summary = a_transaction_summary(
+                    start_time=start_time, end_time=end_time
+                )
+                self.assertEqual(
+                    summary.time_consumption_min, expected_time_consumption_min
                 )
 
-                with model_data({Checkout: checkout, Tariff: tariff}):
-                    pricing = generate_pricing(checkout.id)
-                    self.assertEqual(
-                        pricing.time_consumption_min, expected_time_consumption_min
-                    )
+    def test_time_consumption_min_includes_microseconds(self):
+        for start_time, end_time, expected_time_consumption_min in [
+            (
+                datetime(2024, 8, 15, 10, 0, 0, 0),
+                datetime(2024, 8, 15, 10, 0, 0, 500_000),
+                Decimal("0.008333333333333333333333333333"),
+            ),
+            (
+                datetime(2024, 8, 15, 10, 0, 0, 499_999),
+                datetime(2024, 8, 15, 10, 20, 0, 999_999),
+                Decimal("20.00833333333333333333333333"),
+            ),
+        ]:
+            with self.subTest(
+                start_time=start_time,
+                end_time=end_time,
+                expected_time_consumption_min=expected_time_consumption_min,
+            ):
+                summary = a_transaction_summary(
+                    start_time=start_time, end_time=end_time
+                )
+                self.assertEqual(
+                    summary.time_consumption_min, expected_time_consumption_min
+                )
 
-    def test_pricing_has_time_costs_in_currency_sub_units(self):
+    def test_time_consumption_min_when_missing_end_time(self):
+        now = datetime(2024, 8, 15, 10, 59, 59)
+        for start_time, expected_time_consumption_min in [
+            (
+                datetime(2024, 8, 15, 9, 59, 59),
+                Decimal("60"),
+            ),
+            (
+                datetime(2024, 8, 15, 10, 0, 0),
+                Decimal("59.98333333333333333333333333"),
+            ),
+            (
+                datetime(2024, 8, 15, 10, 30, 0),
+                Decimal("29.98333333333333333333333333"),
+            ),
+            (
+                datetime(2024, 8, 15, 10, 41, 56),
+                Decimal("18.05"),
+            ),
+            (
+                datetime(2024, 8, 15, 10, 59, 59),
+                Decimal("0"),
+            ),
+        ]:
+            with self.subTest(
+                start_time=start_time,
+                now=now,
+                expected_time_consumption_min=expected_time_consumption_min,
+            ):
+                with patch("model.transaction_summary.datetime") as dt_mock:
+                    dt_mock.now.return_value = now
+                    summary = a_transaction_summary(
+                        start_time=start_time, end_time=None
+                    )
+                    self.assertEqual(
+                        summary.time_consumption_min, expected_time_consumption_min
+                    )
+                    dt_mock.now.assert_called_with(timezone.utc)
+
+    def test_time_costs(self):
         currency = "USD"
-        for price_minute, start_time, end_time, expected_time_costs in [
+        for (
+            price_minute,
+            start_time,
+            end_time,
+            expected_time_costs,
+        ) in [  # TODO: issue with repeating decimals?
             (
                 0.09,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 20, 0),
-                180,
-            ),  # 1.80
+                Money(amount="1.80", currency=currency),
+            ),
             (
                 0.14,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 20, 0),
-                280,
-            ),  # 2.80
+                Money(amount="2.80", currency=currency),
+            ),
             (
                 0.23,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 20, 0),
-                460,
-            ),  # 4.60
+                Money(amount="4.60", currency=currency),
+            ),
             (
                 0.25,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 20, 0),
-                500,
-            ),  # 5.00
+                Money(amount="5.00", currency=currency),
+            ),
             (
                 0.47,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 20, 0),
-                940,
-            ),  # 9.40
+                Money(amount="9.40", currency=currency),
+            ),
             (
                 0.61,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 20, 0),
-                1220,
-            ),  # 12.20
+                Money(amount="12.20", currency=currency),
+            ),
             (
                 0.69,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 20, 0),
-                1380,
-            ),  # 13.80
+                Money(amount="13.80", currency=currency),
+            ),
             (
                 0.09,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                539,
-            ),  # 5.3985
+                Money(amount="5.3985", currency=currency),
+            ),
             (
                 0.14,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                839,
-            ),  # 8.397666666666666666666666666666
+                Money(amount="8.397666666666666666666666666", currency=currency),
+            ),
             (
                 0.23,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                1379,
-            ),  # 13.79616666666666666666666666666
+                Money(amount="13.79616666666666666666666667", currency=currency),
+            ),
             (
                 0.25,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                1499,
-            ),  # 14.995833333333333333333333333333
+                Money(amount="14.99583333333333333333333333", currency=currency),
+            ),
             (
                 0.47,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                2819,
-            ),  # 28.19216666666666666666666666666
+                Money(amount="28.19216666666666666666666667", currency=currency),
+            ),
             (
                 0.61,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                3658,
-            ),  # 36.589833333333333333333333333333
+                Money(amount="36.58983333333333333333333333", currency=currency),
+            ),
             (
                 0.69,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                4138,
-            ),  # 41.3885
+                Money(amount="41.3885", currency=currency),
+            ),
             (
                 0.09,
                 datetime(2024, 8, 15, 23, 50, 59),
                 datetime(2024, 8, 16, 0, 20, 34),
-                266,
-            ),  # 2.6625
+                Money(amount="2.6625", currency=currency),
+            ),
             (
                 0.14,
                 datetime(2024, 8, 15, 23, 50, 59),
                 datetime(2024, 8, 16, 0, 20, 34),
-                414,
-            ),  # 4.14166666666666666666666666666
+                Money(amount="4.141666666666666666666666666", currency=currency),
+            ),
             (
                 0.23,
                 datetime(2024, 8, 15, 23, 50, 59),
                 datetime(2024, 8, 16, 0, 20, 34),
-                680,
-            ),  # 6.8041666666666666666666666666667
+                Money(amount="6.804166666666666666666666666", currency=currency),
+            ),
             (
                 0.25,
                 datetime(2024, 8, 15, 23, 50, 59),
                 datetime(2024, 8, 16, 0, 20, 34),
-                739,
-            ),  # 7.395833333333333333333333333333
+                Money(amount="7.395833333333333333333333332", currency=currency),
+            ),
             (
                 0.47,
                 datetime(2024, 8, 15, 23, 50, 59),
                 datetime(2024, 8, 16, 0, 20, 34),
-                1390,
-            ),  # 13.90416666666666666666666666666
+                Money(amount="13.90416666666666666666666667", currency=currency),
+            ),
             (
                 0.61,
                 datetime(2024, 8, 15, 23, 50, 59),
                 datetime(2024, 8, 16, 0, 20, 34),
-                1804,
-            ),  # 18.04583333333333333333333333333
+                Money(amount="18.04583333333333333333333333", currency=currency),
+            ),
             (
                 0.69,
                 datetime(2024, 8, 15, 23, 50, 59),
                 datetime(2024, 8, 16, 0, 20, 34),
-                2041,
-            ),  # 20.4125
+                Money(amount="20.4125", currency=currency),
+            ),
         ]:
             with self.subTest(
                 price_minute=price_minute,
@@ -368,79 +349,50 @@ class GeneratePricingTests(unittest.TestCase):
                 end_time=end_time,
                 expected_time_costs=expected_time_costs,
             ):
-                tariff = a_tariff(price_minute=price_minute, currency=currency)
-                checkout = a_checkout(
-                    tariff_id=tariff.id,
-                    transaction_start_time=start_time,
-                    transaction_end_time=end_time,
+                summary = a_transaction_summary(
+                    start_time=start_time,
+                    end_time=end_time,
+                    currency=currency,
+                    price_minute=price_minute,
                 )
+                self.assertEqual(summary.time_costs, expected_time_costs)
 
-                with model_data({Checkout: checkout, Tariff: tariff}):
-                    pricing = generate_pricing(checkout.id)
-                    self.assertEqual(pricing.time_costs, expected_time_costs)
+    def test_session_consumption_is_always_one(self):
+        summary = a_transaction_summary()
+        self.assertEqual(summary.session_consumption, 1)
 
-    def test_pricing_has_zero_time_costs_when_missing_transaction_start_time(self):
-        tariff = a_tariff(price_minute=0.09)
-        checkout = a_checkout(tariff_id=tariff.id, transaction_start_time=None)
-
-        with model_data({Checkout: checkout, Tariff: tariff}):
-            pricing = generate_pricing(checkout.id)
-            self.assertEqual(pricing.time_costs, 0)
-
-    def test_pricing_has_no_time_costs_when_missing_price_minute(self):
-        tariff = a_tariff(price_minute=None)
-        checkout = a_checkout(
-            tariff_id=tariff.id, transaction_start_time=datetime(2024, 8, 15, 10, 0, 0)
-        )
-
-        with model_data({Checkout: checkout, Tariff: tariff}):
-            pricing = generate_pricing(checkout.id)
-            self.assertIsNone(pricing.time_costs)
-
-    def test_pricing_has_no_time_costs_when_missing_transaction_start_time_and_price_minute(
-        self,
-    ):
-        tariff = a_tariff(price_minute=None)
-        checkout = a_checkout(tariff_id=tariff.id, transaction_start_time=None)
-
-        with model_data({Checkout: checkout, Tariff: tariff}):
-            pricing = generate_pricing(checkout.id)
-            self.assertIsNone(pricing.time_costs)
-
-    def test_pricing_has_one_session_consumption(self):
-        tariff = a_tariff()
-        checkout = a_checkout(tariff_id=tariff.id)
-
-        with model_data({Checkout: checkout, Tariff: tariff}):
-            pricing = generate_pricing(checkout.id)
-            self.assertEqual(pricing.session_consumption, 1)
-
-    def test_pricing_has_session_costs_in_currency_sub_units(self):
-        for tariff, expected_session_costs in [
-            (a_tariff(currency="USD", price_session=0), 0),
-            (a_tariff(currency="USD", price_session=0.99), 99),
-            (a_tariff(currency="USD", price_session=1.99), 199),
-            (a_tariff(currency="USD", price_session=5.01), 501),
+    def test_session_costs(self):
+        currency = "USD"
+        for summary, expected_session_costs in [
+            (
+                a_transaction_summary(currency=currency, price_session=0),
+                Money(amount="0", currency=currency),
+            ),
+            (
+                a_transaction_summary(currency=currency, price_session=0.99),
+                Money(amount="0.99", currency=currency),
+            ),
+            (
+                a_transaction_summary(currency=currency, price_session=1.99),
+                Money(amount="1.99", currency=currency),
+            ),
+            (
+                a_transaction_summary(currency=currency, price_session=5.01),
+                Money(amount="5.01", currency=currency),
+            ),
         ]:
             with self.subTest(
-                price_session=tariff.price_session,
+                price_session=summary.price_session,
                 expected_session_costs=expected_session_costs,
             ):
-                checkout = a_checkout(tariff_id=tariff.id)
+                self.assertEqual(summary.session_costs, expected_session_costs)
 
-                with model_data({Checkout: checkout, Tariff: tariff}):
-                    pricing = generate_pricing(checkout.id)
-                    self.assertEqual(pricing.session_costs, expected_session_costs)
+    def test_payment_costs_tax_rate_is_always_zero(self):
+        summary = a_transaction_summary()
+        self.assertEqual(summary.payment_costs_tax_rate, 0)
 
-    def test_pricing_has_no_session_costs_when_missing_price_session(self):
-        tariff = a_tariff(price_session=None)
-        checkout = a_checkout(tariff_id=tariff.id)
-
-        with model_data({Checkout: checkout, Tariff: tariff}):
-            pricing = generate_pricing(checkout.id)
-            self.assertIsNone(pricing.session_costs)
-
-    def test_pricing_has_total_costs_net_in_currency_sub_units(self):
+    def test_total_costs_net(self):
+        currency = "USD"
         for (
             price_kwh,
             price_minute,
@@ -449,7 +401,7 @@ class GeneratePricingTests(unittest.TestCase):
             start_time,
             end_time,
             expected_total_costs_net,
-        ) in [
+        ) in [  # TODO: issue with repeating decimals?
             (
                 0.09,
                 0.00,
@@ -457,7 +409,7 @@ class GeneratePricingTests(unittest.TestCase):
                 0,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 20, 0),
-                0,
+                Money(amount="0", currency=currency),
             ),
             (
                 0.00,
@@ -466,7 +418,7 @@ class GeneratePricingTests(unittest.TestCase):
                 0,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 20, 0),
-                460,
+                Money(amount="4.60", currency=currency),
             ),
             (
                 0.09,
@@ -475,7 +427,7 @@ class GeneratePricingTests(unittest.TestCase):
                 0,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 20, 0),
-                399,
+                Money(amount="3.99", currency=currency),
             ),
             (
                 0.00,
@@ -484,10 +436,26 @@ class GeneratePricingTests(unittest.TestCase):
                 20,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 20, 0),
-                0,
+                Money(amount="0", currency=currency),
             ),
-            (0.09, 0.23, 0.00, 20, None, None, 180),
-            (0.09, 0.23, 3.99, 20, None, None, 579),
+            (
+                0.09,
+                0.23,
+                0.00,
+                20,
+                None,
+                None,
+                Money(amount="1.80", currency=currency),
+            ),
+            (
+                0.09,
+                0.23,
+                3.99,
+                20,
+                None,
+                None,
+                Money(amount="5.79", currency=currency),
+            ),
             (
                 0.09,
                 0.09,
@@ -495,7 +463,7 @@ class GeneratePricingTests(unittest.TestCase):
                 20,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 20, 0),
-                759,
+                Money(amount="7.59", currency=currency),
             ),
             (
                 0.14,
@@ -504,7 +472,7 @@ class GeneratePricingTests(unittest.TestCase):
                 20,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 20, 0),
-                959,
+                Money(amount="9.59", currency=currency),
             ),
             (
                 0.23,
@@ -513,7 +481,7 @@ class GeneratePricingTests(unittest.TestCase):
                 20,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 20, 0),
-                1319,
+                Money(amount="13.19", currency=currency),
             ),
             (
                 0.25,
@@ -522,7 +490,7 @@ class GeneratePricingTests(unittest.TestCase):
                 20,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 20, 0),
-                1399,
+                Money(amount="13.99", currency=currency),
             ),
             (
                 0.47,
@@ -531,7 +499,7 @@ class GeneratePricingTests(unittest.TestCase):
                 20,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 20, 0),
-                2279,
+                Money(amount="22.79", currency=currency),
             ),
             (
                 0.61,
@@ -540,7 +508,7 @@ class GeneratePricingTests(unittest.TestCase):
                 20,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 20, 0),
-                2839,
+                Money(amount="28.39", currency=currency),
             ),
             (
                 0.69,
@@ -549,7 +517,7 @@ class GeneratePricingTests(unittest.TestCase):
                 20,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 20, 0),
-                3159,
+                Money(amount="31.59", currency=currency),
             ),
             (
                 0.09,
@@ -558,8 +526,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                1098,
-            ),  # 10.9876
+                Money(amount="10.9876", currency=currency),
+            ),
             (
                 0.14,
                 0.09,
@@ -567,8 +535,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                1298,
-            ),  # 12.9871
+                Money(amount="12.9871", currency=currency),
+            ),
             (
                 0.23,
                 0.09,
@@ -576,8 +544,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                1658,
-            ),  # 16.5862
+                Money(amount="16.5862", currency=currency),
+            ),
             (
                 0.25,
                 0.09,
@@ -585,8 +553,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                1738,
-            ),  # 17.386
+                Money(amount="17.386", currency=currency),
+            ),
             (
                 0.47,
                 0.09,
@@ -594,8 +562,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                2618,
-            ),  # 26.1838
+                Money(amount="26.1838", currency=currency),
+            ),
             (
                 0.61,
                 0.09,
@@ -603,8 +571,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                3178,
-            ),  # 31.7824
+                Money(amount="31.7824", currency=currency),
+            ),
             (
                 0.69,
                 0.09,
@@ -612,8 +580,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                3498,
-            ),  # 34.9816
+                Money(amount="34.9816", currency=currency),
+            ),
             (
                 0.145,
                 0.09,
@@ -621,8 +589,8 @@ class GeneratePricingTests(unittest.TestCase):
                 41.784,
                 datetime(2024, 8, 15, 23, 50, 59),
                 datetime(2024, 8, 16, 0, 20, 34),
-                1071,
-            ),  # 10.71118
+                Money(amount="10.71118", currency=currency),
+            ),
             (
                 0.145,
                 0.14,
@@ -630,8 +598,8 @@ class GeneratePricingTests(unittest.TestCase):
                 41.784,
                 datetime(2024, 8, 15, 23, 50, 59),
                 datetime(2024, 8, 16, 0, 20, 34),
-                1219,
-            ),  # 12.190346666666666
+                Money(amount="12.19034666666666666666666667", currency=currency),
+            ),
             (
                 0.145,
                 0.23,
@@ -639,8 +607,8 @@ class GeneratePricingTests(unittest.TestCase):
                 41.784,
                 datetime(2024, 8, 15, 23, 50, 59),
                 datetime(2024, 8, 16, 0, 20, 34),
-                1485,
-            ),  # 14.85284666666666666666666666666
+                Money(amount="14.85284666666666666666666667", currency=currency),
+            ),
             (
                 0.145,
                 0.25,
@@ -648,8 +616,8 @@ class GeneratePricingTests(unittest.TestCase):
                 41.784,
                 datetime(2024, 8, 15, 23, 50, 59),
                 datetime(2024, 8, 16, 0, 20, 34),
-                1544,
-            ),  # 15.44451333333333333333333
+                Money(amount="15.44451333333333333333333333", currency=currency),
+            ),
             (
                 0.145,
                 0.47,
@@ -657,8 +625,8 @@ class GeneratePricingTests(unittest.TestCase):
                 41.784,
                 datetime(2024, 8, 15, 23, 50, 59),
                 datetime(2024, 8, 16, 0, 20, 34),
-                2195,
-            ),  # 21.9528466666666666666
+                Money(amount="21.95284666666666666666666667", currency=currency),
+            ),
             (
                 0.145,
                 0.61,
@@ -666,8 +634,8 @@ class GeneratePricingTests(unittest.TestCase):
                 41.784,
                 datetime(2024, 8, 15, 23, 50, 59),
                 datetime(2024, 8, 16, 0, 20, 34),
-                2609,
-            ),  # 26.0945133333333333333333
+                Money(amount="26.09451333333333333333333333", currency=currency),
+            ),
             (
                 0.145,
                 0.69,
@@ -675,8 +643,8 @@ class GeneratePricingTests(unittest.TestCase):
                 41.784,
                 datetime(2024, 8, 15, 23, 50, 59),
                 datetime(2024, 8, 16, 0, 20, 34),
-                2846,
-            ),  # 28.46118
+                Money(amount="28.46118", currency=currency),
+            ),
         ]:
             with self.subTest(
                 price_kwh=price_kwh,
@@ -687,23 +655,19 @@ class GeneratePricingTests(unittest.TestCase):
                 end_time=end_time,
                 expected_total_costs_net=expected_total_costs_net,
             ):
-                tariff = a_tariff(
+                summary = a_transaction_summary(
+                    start_time=start_time,
+                    end_time=end_time,
+                    kwh=kwh,
+                    currency=currency,
                     price_kwh=price_kwh,
                     price_minute=price_minute,
                     price_session=price_session,
                 )
-                checkout = a_checkout(
-                    tariff_id=tariff.id,
-                    transaction_kwh=kwh,
-                    transaction_start_time=start_time,
-                    transaction_end_time=end_time,
-                )
+                self.assertEqual(summary.total_costs_net, expected_total_costs_net)
 
-                with model_data({Checkout: checkout, Tariff: tariff}):
-                    pricing = generate_pricing(checkout.id)
-                    self.assertEqual(pricing.total_costs_net, expected_total_costs_net)
-
-    def test_pricing_has_tax_costs_in_currency_sub_units(self):
+    def test_tax_costs(self):
+        currency = "USD"
         for (
             price_kwh,
             price_minute,
@@ -722,7 +686,7 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                0,
+                Money(amount="0", currency=currency),
             ),
             (
                 0.14,
@@ -732,8 +696,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                12,
-            ),  # 0.129871
+                Money(amount="0.129871", currency=currency),
+            ),
             (
                 0.14,
                 0.09,
@@ -742,8 +706,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                38,
-            ),  # 0.389613
+                Money(amount="0.389613", currency=currency),
+            ),
             (
                 0.14,
                 0.09,
@@ -752,8 +716,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                103,
-            ),  # 1.038968
+                Money(amount="1.038968", currency=currency),
+            ),
             (
                 0.14,
                 0.09,
@@ -762,8 +726,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                155,
-            ),  # 1.558452
+                Money(amount="1.558452", currency=currency),
+            ),
             (
                 0.14,
                 0.09,
@@ -772,8 +736,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                246,
-            ),  # 2.467549
+                Money(amount="2.467549", currency=currency),
+            ),
             (
                 0.14,
                 0.09,
@@ -782,8 +746,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                298,
-            ),  # 2.987033
+                Money(amount="2.987033", currency=currency),
+            ),
             (
                 0.14,
                 0.09,
@@ -792,8 +756,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                415,
-            ),  # 4.155872
+                Money(amount="4.155872", currency=currency),
+            ),
             (
                 0.14,
                 0.09,
@@ -802,8 +766,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                649,
-            ),  # 6.49355
+                Money(amount="6.49355", currency=currency),
+            ),
             (
                 0.14,
                 0.09,
@@ -812,8 +776,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                1298,
-            ),  # 12.9871
+                Money(amount="12.9871", currency=currency),
+            ),
             (
                 0.14,
                 0.09,
@@ -822,8 +786,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                2597,
-            ),  # 25.9742
+                Money(amount="25.9742", currency=currency),
+            ),
         ]:
             with self.subTest(
                 price_kwh=price_kwh,
@@ -835,24 +799,20 @@ class GeneratePricingTests(unittest.TestCase):
                 end_time=end_time,
                 expected_tax_costs=expected_tax_costs,
             ):
-                tariff = a_tariff(
+                summary = a_transaction_summary(
+                    start_time=start_time,
+                    end_time=end_time,
+                    kwh=kwh,
+                    currency=currency,
                     price_kwh=price_kwh,
                     price_minute=price_minute,
                     price_session=price_session,
                     tax_rate=tax_rate,
                 )
-                checkout = a_checkout(
-                    tariff_id=tariff.id,
-                    transaction_kwh=kwh,
-                    transaction_start_time=start_time,
-                    transaction_end_time=end_time,
-                )
+                self.assertEqual(summary.tax_costs, expected_tax_costs)
 
-                with model_data({Checkout: checkout, Tariff: tariff}):
-                    pricing = generate_pricing(checkout.id)
-                    self.assertEqual(pricing.tax_costs, expected_tax_costs)
-
-    def test_pricing_has_total_costs_gross_in_currency_sub_units(self):
+    def test_total_costs_gross(self):
+        currency = "USD"
         for (
             price_kwh,
             price_minute,
@@ -871,8 +831,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                1298,
-            ),  # 12.9871
+                Money(amount="12.9871", currency=currency),
+            ),
             (
                 0.14,
                 0.09,
@@ -881,8 +841,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                1311,
-            ),  # 13.116971
+                Money(amount="13.116971", currency=currency),
+            ),
             (
                 0.14,
                 0.09,
@@ -891,8 +851,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                1337,
-            ),  # 13.376713
+                Money(amount="13.376713", currency=currency),
+            ),
             (
                 0.14,
                 0.09,
@@ -901,8 +861,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                1402,
-            ),  # 14.026068
+                Money(amount="14.026068", currency=currency),
+            ),
             (
                 0.14,
                 0.09,
@@ -911,8 +871,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                1454,
-            ),  # 14.545552
+                Money(amount="14.545552", currency=currency),
+            ),
             (
                 0.14,
                 0.09,
@@ -921,8 +881,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                1545,
-            ),  # 15.454649
+                Money(amount="15.454649", currency=currency),
+            ),
             (
                 0.14,
                 0.09,
@@ -931,8 +891,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                1597,
-            ),  # 15.974133
+                Money(amount="15.974133", currency=currency),
+            ),
             (
                 0.14,
                 0.09,
@@ -941,8 +901,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                1714,
-            ),  # 17.142972
+                Money(amount="17.142972", currency=currency),
+            ),
             (
                 0.14,
                 0.09,
@@ -951,8 +911,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                1948,
-            ),  # 19.48065
+                Money(amount="19.48065", currency=currency),
+            ),
             (
                 0.14,
                 0.09,
@@ -961,8 +921,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                2597,
-            ),  # 25.9742
+                Money(amount="25.9742", currency=currency),
+            ),
             (
                 0.14,
                 0.09,
@@ -971,8 +931,8 @@ class GeneratePricingTests(unittest.TestCase):
                 39.99,
                 datetime(2024, 8, 15, 10, 0, 0),
                 datetime(2024, 8, 15, 10, 59, 59),
-                3896,
-            ),  # 38.9613
+                Money(amount="38.9613", currency=currency),
+            ),
         ]:
             with self.subTest(
                 price_kwh=price_kwh,
@@ -984,95 +944,35 @@ class GeneratePricingTests(unittest.TestCase):
                 end_time=end_time,
                 expected_total_costs_gross=expected_total_costs_gross,
             ):
-                tariff = a_tariff(
+                summary = a_transaction_summary(
+                    start_time=start_time,
+                    end_time=end_time,
+                    kwh=kwh,
+                    currency=currency,
                     price_kwh=price_kwh,
                     price_minute=price_minute,
                     price_session=price_session,
                     tax_rate=tax_rate,
                 )
-                checkout = a_checkout(
-                    tariff_id=tariff.id,
-                    transaction_kwh=kwh,
-                    transaction_start_time=start_time,
-                    transaction_end_time=end_time,
-                )
-
-                with model_data({Checkout: checkout, Tariff: tariff}):
-                    pricing = generate_pricing(checkout.id)
-                    self.assertEqual(
-                        pricing.total_costs_gross, expected_total_costs_gross
-                    )
-
-    def test_payment_costs_tax_rate_is_zero(self):
-        tariff = a_tariff()
-        checkout = a_checkout(tariff_id=tariff.id)
-
-        with model_data({Checkout: checkout, Tariff: tariff}):
-            pricing = generate_pricing(checkout.id)
-            self.assertEqual(pricing.payment_costs_tax_rate, 0)
+                self.assertEqual(summary.total_costs_gross, expected_total_costs_gross)
 
 
-@contextmanager
-def model_data(data):
-    with patch(
-        "utils.utils.get_db",
-        return_value=iter(
-            [
-                Mock(
-                    query=Mock(
-                        side_effect=lambda model: MagicMock(
-                            filter=lambda expr: MagicMock(
-                                first=lambda: data.get(model)
-                                if data.get(model)
-                                and expr.right.value == data[model].id
-                                else None
-                            )
-                        )
-                    )
-                )
-            ]
-        ),
-    ):
-        yield
-
-
-def a_checkout(**overrides) -> Checkout:
+def a_transaction_summary(**overrides) -> TransactionSummary:
     defaults = {
-        "id": 1,
-        "payment_intent_id": 99,
-        "authorization_amount": 0.99,
-        "connector_id": 1,
-        "tariff_id": 3,
-        "qr_code_message_id": 5,
-        "remote_request_status": "ACCEPTED",
-        "remote_request_transaction_id": "7c4af61c-0f2d-4c90-8396-e479acc0beca",
-        "transaction_start_time": datetime(2023, 8, 14, 10, 00, 00),
-        "transaction_end_time": datetime(2023, 8, 14, 10, 30, 59),
-        "transaction_last_meter_reading": 31.74,
-        "transaction_kwh": 31.74,
-        "power_active_import": 31.74,
-        "transaction_soc": 15,
-    }
-    defaults.update(overrides)
-
-    return Checkout(**defaults)
-
-
-def a_tariff(**overrides) -> Tariff:
-    defaults = {
-        "id": 3,
-        "price_kwh": 0.30,
+        "start_time": datetime(2023, 8, 14, 10, 00, 00),
+        "end_time": datetime(2023, 8, 14, 10, 30, 59),
+        "kwh": 31.74,
+        "currency": "USD",
         "price_minute": 0.05,
         "price_session": 3.00,
-        "currency": "USD",
+        "price_kwh": 0.30,
         "tax_rate": 23,
-        "authorization_amount": 10.00,
         "payment_fee": 1,
-        "stripe_price_id": "price_b30e584f5822",
     }
+
     defaults.update(overrides)
 
-    return Tariff(**defaults)
+    return TransactionSummary(**defaults)
 
 
 if __name__ == "__main__":

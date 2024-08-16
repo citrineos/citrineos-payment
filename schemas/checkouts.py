@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from pydantic import BaseModel, ConfigDict, computed_field
+from pydantic import BaseModel, ConfigDict
 
 
 class RequestStartStopStatusEnumType(str, Enum):
@@ -33,43 +33,11 @@ class Pricing(BaseModel):
     session_consumption: int | None = None
     session_costs: int | None = None
     payment_costs_tax_rate: int = 0  # Used for tax reverse charge scenarios
-
-    @computed_field
-    @property
-    def total_costs_net(self) -> int:
-        result = 0
-        if self.energy_costs is not None:
-            result += self.energy_costs
-        if self.time_costs is not None:
-            result += self.time_costs
-        if self.session_costs is not None:
-            result += self.session_costs
-        return result
-
-    @computed_field
-    @property
-    def tax_costs(self) -> int:
-        return int(self.total_costs_net * self.tax_rate / 100)
-
-    @computed_field
-    @property
-    def total_costs_gross(self) -> int:
-        return int(self.total_costs_net + self.tax_costs)
-
-    @computed_field
-    @property
-    def payment_costs_gross(self) -> int:
-        return int(
-            self.total_costs_net
-            * (1 + self.payment_costs_tax_rate / 100)
-            * self.payment_fee
-            / 100
-        )
-
-    @computed_field
-    @property
-    def payment_costs_net(self) -> int:
-        return int(self.total_costs_net * self.payment_fee / 100)
+    total_costs_net: int = 0
+    tax_costs: int = 0
+    total_costs_gross: int = 0
+    payment_costs_gross: int = 0
+    payment_costs_net: int = 0
 
 
 class Checkout(CheckoutBase):

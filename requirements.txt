@@ -31,3 +31,4 @@ typing_extensions==4.12.2
 urllib3==1.26.19
 uvicorn==0.30.6
 yarl==1.9.4
+py-moneyed=3.0
