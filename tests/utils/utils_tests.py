@@ -1003,6 +1003,29 @@ class GeneratePricingTests(unittest.TestCase):
                         pricing.total_costs_gross, expected_total_costs_gross
                     )
 
+    def test_pricing_is_in_currency_sub_units(self):
+        tariff = a_tariff(
+            price_kwh=0.25,
+            price_minute=0.61,
+            price_session=2.99,
+            tax_rate=8,
+        )
+        checkout = a_checkout(
+            tariff_id=tariff.id,
+            transaction_kwh=39.99,
+            transaction_start_time=datetime(2024, 8, 15, 10, 0, 0),
+            transaction_end_time=datetime(2024, 8, 15, 10, 59, 59),
+        )
+
+        with model_data({Checkout: checkout, Tariff: tariff}):
+            pricing = generate_pricing(checkout.id)
+            self.assertEqual(pricing.energy_costs, 999)
+            self.assertEqual(pricing.time_costs, 3658)
+            self.assertEqual(pricing.session_costs, 299)
+            self.assertEqual(pricing.total_costs_net, 4957)
+            self.assertEqual(pricing.tax_costs, 396)
+            self.assertEqual(pricing.total_costs_gross, 5354)
+
     def test_payment_costs_tax_rate_is_zero(self):
         tariff = a_tariff()
         checkout = a_checkout(tariff_id=tariff.id)
