@@ -15,8 +15,8 @@ multidict==6.0.5
 mysql-connector==2.2.9
 pamqp==3.2.1
 psycopg2-binary==2.9.9
-pydantic==2.5.2
-pydantic_core==2.14.5
+pydantic==2.8.2
+pydantic_core==2.20.1
 python-dateutil==2.8.2
 python-dotenv==0.21.1
 qrcode==7.4.2
