@@ -13,7 +13,7 @@ Jinja2==3.1.4
 MarkupSafe==2.1.5
 multidict==6.0.5
 mysql-connector==2.2.9
-pamqp==3.2.1
+pamqp==3.3.0
 psycopg2-binary==2.9.9
 pydantic==2.8.2
 pydantic_core==2.20.1
