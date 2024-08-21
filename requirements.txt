@@ -29,5 +29,5 @@ starlette==0.38.2
 stripe==5.2.0
 typing_extensions==4.12.2
 urllib3==1.26.19
-uvicorn==0.20.0
+uvicorn==0.30.6
 yarl==1.9.4
