@@ -92,6 +92,13 @@ To set up your development environment, run the following commands:
 ./deploy_local.sh
 ```
 
+## Tests
+
+To execute the tests, run the following command from the root directory:
+```bash
+python -m unittest
+```
+
 ## Code Style
 
 We use [Ruff](https://docs.astral.sh/ruff/) to lint and format our code.
