@@ -74,7 +74,8 @@ class GeneratePricingTests(unittest.TestCase):
                         pricing.energy_consumption_kwh, expected_energy_consumption
                     )
 
-    def test_pricing_has_energy_costs(self):
+    def test_pricing_has_energy_costs_in_currency_sub_units(self):
+        currency = "USD"
         for price_kwh, kwh, expected_energy_costs in [
             (0.09, 20, 180),  # 1.80
             (0.14, 20, 280),  # 2.80
@@ -117,7 +118,7 @@ class GeneratePricingTests(unittest.TestCase):
                 kwh=kwh,
                 expected_energy_costs=expected_energy_costs,
             ):
-                tariff = a_tariff(price_kwh=price_kwh)
+                tariff = a_tariff(price_kwh=price_kwh, currency=currency)
                 checkout = a_checkout(tariff_id=tariff.id, transaction_kwh=kwh)
 
                 with model_data({Checkout: checkout, Tariff: tariff}):
@@ -150,7 +151,89 @@ class GeneratePricingTests(unittest.TestCase):
             pricing = generate_pricing(checkout.id)
             self.assertIsNone(pricing.energy_costs)
 
-    def test_pricing_has_time_costs(self):
+    def test_pricing_has_time_consumption_min(self):
+        for start_time, end_time, expected_time_consumption_min in [
+            (
+                datetime(2024, 8, 15, 10, 0, 0),
+                datetime(2024, 8, 15, 10, 0, 0),
+                0,
+            ),
+            (
+                datetime(2024, 8, 15, 10, 0, 0),
+                datetime(2024, 8, 15, 10, 0, 1),
+                0.01666666666666666666666666667,
+            ),
+            (
+                datetime(2024, 8, 15, 10, 0, 0),
+                datetime(2024, 8, 15, 10, 0, 59),
+                0.9833333333333333333333333333,
+            ),
+            (
+                datetime(2024, 8, 15, 10, 0, 0),
+                datetime(2024, 8, 15, 10, 1, 0),
+                1,
+            ),
+            (
+                datetime(2024, 8, 15, 10, 0, 0),
+                datetime(2024, 8, 15, 10, 20, 0),
+                20,
+            ),
+            (
+                datetime(2024, 8, 15, 10, 0, 0),
+                datetime(2024, 8, 15, 10, 59, 59),
+                59.98333333333333333333333333,
+            ),
+            (
+                datetime(2024, 8, 15, 23, 50, 59),
+                datetime(2024, 8, 16, 0, 20, 34),
+                29.58333333333333333333333333,
+            ),
+            (
+                datetime(2024, 8, 15, 23, 59, 59),
+                datetime(2024, 8, 16, 0, 0, 0),
+                0.01666666666666666666666666667,
+            ),
+            (
+                datetime(2024, 8, 15, 0, 0, 0),
+                datetime(2024, 8, 15, 23, 59, 59),
+                1439.983333333333333333333333,
+            ),
+            (
+                datetime(2024, 8, 15, 0, 0, 0),
+                datetime(2024, 8, 16, 0, 0, 0),
+                1440,
+            ),
+            (
+                datetime(2024, 8, 15, 0, 0, 0),
+                datetime(2024, 8, 18, 0, 0, 0),
+                4320,
+            ),
+            (
+                datetime(2024, 12, 31, 23, 59, 59),
+                datetime(2025, 1, 1, 0, 0, 1),
+                0.03333333333333333333333333333,
+            ),
+        ]:
+            with self.subTest(
+                start_time=start_time,
+                end_time=end_time,
+                expected_time_consumption_min=expected_time_consumption_min,
+            ):
+                tariff = a_tariff()
+                checkout = a_checkout(
+                    tariff_id=tariff.id,
+                    transaction_start_time=start_time,
+                    transaction_end_time=end_time,
+                )
+
+                with model_data({Checkout: checkout, Tariff: tariff}):
+                    pricing = generate_pricing(checkout.id)
+                    self.assertEqual(
+                        pricing.time_consumption_min, expected_time_consumption_min
+                    )
+
+    def test_pricing_has_time_costs_in_currency_sub_units(self):
+        currency = "USD"
         for price_minute, start_time, end_time, expected_time_costs in [
             (
                 0.09,
@@ -285,7 +368,7 @@ class GeneratePricingTests(unittest.TestCase):
                 end_time=end_time,
                 expected_time_costs=expected_time_costs,
             ):
-                tariff = a_tariff(price_minute=price_minute)
+                tariff = a_tariff(price_minute=price_minute, currency=currency)
                 checkout = a_checkout(
                     tariff_id=tariff.id,
                     transaction_start_time=start_time,
@@ -332,12 +415,12 @@ class GeneratePricingTests(unittest.TestCase):
             pricing = generate_pricing(checkout.id)
             self.assertEqual(pricing.session_consumption, 1)
 
-    def test_pricing_has_session_costs(self):
+    def test_pricing_has_session_costs_in_currency_sub_units(self):
         for tariff, expected_session_costs in [
-            (a_tariff(price_session=0), 0),
-            (a_tariff(price_session=0.99), 99),
-            (a_tariff(price_session=1.99), 199),
-            (a_tariff(price_session=5.01), 501),
+            (a_tariff(currency="USD", price_session=0), 0),
+            (a_tariff(currency="USD", price_session=0.99), 99),
+            (a_tariff(currency="USD", price_session=1.99), 199),
+            (a_tariff(currency="USD", price_session=5.01), 501),
         ]:
             with self.subTest(
                 price_session=tariff.price_session,
@@ -357,7 +440,7 @@ class GeneratePricingTests(unittest.TestCase):
             pricing = generate_pricing(checkout.id)
             self.assertIsNone(pricing.session_costs)
 
-    def test_pricing_has_total_costs_net(self):
+    def test_pricing_has_total_costs_net_in_currency_sub_units(self):
         for (
             price_kwh,
             price_minute,
@@ -620,7 +703,7 @@ class GeneratePricingTests(unittest.TestCase):
                     pricing = generate_pricing(checkout.id)
                     self.assertEqual(pricing.total_costs_net, expected_total_costs_net)
 
-    def test_pricing_has_tax_costs(self):
+    def test_pricing_has_tax_costs_in_currency_sub_units(self):
         for (
             price_kwh,
             price_minute,
@@ -769,7 +852,7 @@ class GeneratePricingTests(unittest.TestCase):
                     pricing = generate_pricing(checkout.id)
                     self.assertEqual(pricing.tax_costs, expected_tax_costs)
 
-    def test_pricing_has_total_costs_gross(self):
+    def test_pricing_has_total_costs_gross_in_currency_sub_units(self):
         for (
             price_kwh,
             price_minute,
@@ -919,6 +1002,29 @@ class GeneratePricingTests(unittest.TestCase):
                     self.assertEqual(
                         pricing.total_costs_gross, expected_total_costs_gross
                     )
+
+    def test_pricing_is_in_currency_sub_units(self):
+        tariff = a_tariff(
+            price_kwh=0.25,
+            price_minute=0.61,
+            price_session=2.99,
+            tax_rate=8,
+        )
+        checkout = a_checkout(
+            tariff_id=tariff.id,
+            transaction_kwh=39.99,
+            transaction_start_time=datetime(2024, 8, 15, 10, 0, 0),
+            transaction_end_time=datetime(2024, 8, 15, 10, 59, 59),
+        )
+
+        with model_data({Checkout: checkout, Tariff: tariff}):
+            pricing = generate_pricing(checkout.id)
+            self.assertEqual(pricing.energy_costs, 999)
+            self.assertEqual(pricing.time_costs, 3658)
+            self.assertEqual(pricing.session_costs, 299)
+            self.assertEqual(pricing.total_costs_net, 4957)
+            self.assertEqual(pricing.tax_costs, 396)
+            self.assertEqual(pricing.total_costs_gross, 5354)
 
     def test_payment_costs_tax_rate_is_zero(self):
         tariff = a_tariff()

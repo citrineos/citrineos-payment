@@ -1,8 +1,8 @@
-from datetime import datetime, timezone
 from logging import error
 from sqlalchemy.orm import Session
 
 from db.init_db import Checkout, Tariff, get_db
+from model.transaction_summary import TransactionSummary
 from schemas.checkouts import Pricing
 
 
@@ -24,32 +24,38 @@ def generate_pricing(
         )
         return None
 
-    session_time_min = 0
-    if db_checkout.transaction_start_time is not None:
-        session_end_time = (
-            db_checkout.transaction_end_time
-            if db_checkout.transaction_end_time is not None
-            else datetime.now(timezone.utc)
-        )
-        session_time_min = (
-            session_end_time - db_checkout.transaction_start_time
-        ).total_seconds() / 60
-    pricing = Pricing(
+    transaction_summary = TransactionSummary(
+        start_time=db_checkout.transaction_start_time,
+        end_time=db_checkout.transaction_end_time,
+        kwh=db_checkout.transaction_kwh,
         currency=db_tariff.currency,
+        price_minute=db_tariff.price_minute,
+        price_session=db_tariff.price_session,
+        price_kwh=db_tariff.price_kwh,
         tax_rate=db_tariff.tax_rate,
         payment_fee=db_tariff.payment_fee,
-        energy_consumption_kwh=db_checkout.transaction_kwh,
-        energy_costs=int((db_checkout.transaction_kwh * db_tariff.price_kwh * 100))
-        if db_checkout.transaction_kwh is not None and db_tariff.price_kwh is not None
+    )
+
+    return Pricing(
+        currency=transaction_summary.currency,
+        tax_rate=transaction_summary.tax_rate,
+        payment_fee=transaction_summary.payment_fee,
+        energy_consumption_kwh=transaction_summary.kwh,
+        energy_costs=transaction_summary.energy_costs.get_amount_in_sub_unit()
+        if transaction_summary.energy_costs is not None
         else None,
-        time_consumption_min=session_time_min,
-        time_costs=int((session_time_min * db_tariff.price_minute * 100))
-        if session_time_min is not None and db_tariff.price_minute is not None
+        time_consumption_min=transaction_summary.time_consumption_min,
+        time_costs=transaction_summary.time_costs.get_amount_in_sub_unit()
+        if transaction_summary.time_costs is not None
         else None,
         session_consumption=1,
-        session_costs=int((db_tariff.price_session * 100))
-        if db_tariff.price_session is not None
+        session_costs=transaction_summary.session_costs.get_amount_in_sub_unit()
+        if transaction_summary.session_costs is not None
         else None,
-        payment_costs_tax_rate=0,  # currently 0. needed for reverse charge scenarios
+        payment_costs_tax_rate=0,
+        total_costs_net=transaction_summary.total_costs_net.get_amount_in_sub_unit(),
+        tax_costs=transaction_summary.tax_costs.get_amount_in_sub_unit(),
+        total_costs_gross=transaction_summary.total_costs_gross.get_amount_in_sub_unit(),
+        payment_costs_gross=transaction_summary.payment_costs_gross.get_amount_in_sub_unit(),
+        payment_costs_net=transaction_summary.payment_costs_net.get_amount_in_sub_unit(),
     )
-    return pricing
