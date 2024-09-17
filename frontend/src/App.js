@@ -3,7 +3,6 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { IntlProvider } from 'react-intl';
 
 import './styles/ampay-main.css';
-import 'antd/dist/antd.css';
 import 'remixicon/fonts/remixicon.css';
 
 import Home from './routes/Home';
