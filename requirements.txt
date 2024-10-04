@@ -27,6 +27,6 @@ starlette==0.38.5
 stripe==5.2.0
 typing_extensions==4.12.2
 urllib3==1.26.20
-uvicorn==0.30.6
+uvicorn==0.31.0
 yarl==1.9.4
 py-moneyed==3.0
