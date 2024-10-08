@@ -8,7 +8,7 @@ RUN npm install
 RUN npm run build
 
 # Stage 2: Create the Python Application
-FROM python:3.10-slim
+FROM python:3.13-slim
 
 WORKDIR /app
 COPY . /app
