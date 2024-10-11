@@ -3,7 +3,7 @@ aiormq==6.8.1
 annotated-types==0.7.0
 anyio==4.6.0
 certifi==2024.8.30
-charset-normalizer==3.3.2
+charset-normalizer==3.4.0
 click==8.1.7
 exceptiongroup==1.2.2
 fastapi==0.115.0
