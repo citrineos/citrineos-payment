@@ -42,7 +42,7 @@ const Receipt = () => {
                   }
                 });
               });
-            } catch (e) {
+            } catch {
               const tdata = JSON.stringify(transaction_data);
               const rx =
                 /("sampled_value": \[{"value": ")(OCMF\|{1}.*\|{1}.*{"SD":"{1}.*"})(",)/g;
