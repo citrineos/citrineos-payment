@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@babel/core": "7.25.8",
+    "@babel/core": "7.25.9",
     "@pmmmwh/react-refresh-webpack-plugin": "0.5.15",
     "@svgr/webpack": "8.1.0",
     "@testing-library/jest-dom": "5.17.0",
@@ -90,7 +90,7 @@
     ]
   },
   "devDependencies": {
-    "@babel/eslint-parser": "7.25.8",
+    "@babel/eslint-parser": "7.25.9",
     "@babel/plugin-proposal-private-property-in-object": "7.21.11",
     "@eslint/compat": "1.2.1",
     "@eslint/eslintrc": "3.1.0",
