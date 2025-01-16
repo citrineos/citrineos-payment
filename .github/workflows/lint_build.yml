@@ -1,4 +1,4 @@
-name: Linter
+name: Lint and test build
 
 on:
   pull_request:
@@ -40,6 +40,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
 
       - name: Install JavaScript dependencies
         if: matrix.language == 'javascript'
@@ -50,3 +52,25 @@ jobs:
         if: matrix.language == 'javascript'
         working-directory: frontend
         run: npm run lint
+
+  build:
+    # Build job that runs independently
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build

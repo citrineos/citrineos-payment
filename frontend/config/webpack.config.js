@@ -15,7 +15,6 @@ const InterpolateHtmlPlugin = require('react-dev-utils/InterpolateHtmlPlugin');
 const WorkboxWebpackPlugin = require('workbox-webpack-plugin');
 const ModuleScopePlugin = require('react-dev-utils/ModuleScopePlugin');
 const getCSSModuleLocalIdent = require('react-dev-utils/getCSSModuleLocalIdent');
-const ESLintPlugin = require('eslint-webpack-plugin');
 const paths = require('./paths');
 const modules = require('./modules');
 const getClientEnvironment = require('./env');
@@ -48,11 +47,9 @@ const babelRuntimeRegenerator = require.resolve('@babel/runtime/regenerator', {
 // makes for a smoother build process.
 const shouldInlineRuntimeChunk = process.env.INLINE_RUNTIME_CHUNK !== 'false';
 
-const emitErrorsAsWarnings = process.env.ESLINT_NO_DEV_ERRORS === 'true';
-const disableESLintPlugin = process.env.DISABLE_ESLINT_PLUGIN === 'true';
-
 const imageInlineSizeLimit = parseInt(
   process.env.IMAGE_INLINE_SIZE_LIMIT || '10000',
+  10,
 );
 
 // Check if TypeScript is setup
@@ -80,7 +77,7 @@ const hasJsxRuntime = (() => {
   try {
     require.resolve('react/jsx-runtime');
     return true;
-  } catch (e) {
+  } catch {
     return false;
   }
 })();
@@ -722,23 +719,6 @@ module.exports = function (webpackEnv) {
           logger: {
             infrastructure: 'silent',
           },
-        }),
-      !disableESLintPlugin &&
-        new ESLintPlugin({
-          extensions: ['js', 'mjs', 'jsx', 'ts', 'tsx'],
-          formatter: require.resolve('react-dev-utils/eslintFormatter'),
-          eslintPath: require.resolve('eslint'),
-          failOnError: !(isEnvDevelopment && emitErrorsAsWarnings),
-          context: paths.appSrc,
-          cache: true,
-          cacheLocation: path.resolve(
-            paths.appNodeModules,
-            '.cache/.eslintcache',
-          ),
-          // Remove baseConfig to use your own ESLint configuration
-          // baseConfig: undefined,
-          cwd: paths.appPath,
-          resolvePluginsRelativeTo: __dirname,
         }),
     ].filter(Boolean),
     // Turn off performance processing because we utilize
