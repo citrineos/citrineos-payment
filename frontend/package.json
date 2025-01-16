@@ -68,8 +68,8 @@
     "build": "node scripts/build.js",
     "test": "node scripts/test.js",
     "format": "prettier --write 'src/**/*.{js,jsx,ts,tsx,css,scss,md}'",
-    "lint": "eslint 'src/**/*.{js,jsx}' 'scripts/**/*.{js,jsx}'",
-    "lint:fix": "eslint 'src/**/*.{js,jsx}' 'scripts/**/*.{js,jsx}' --fix"
+    "lint": "eslint 'src/**/*.{js,jsx}' 'scripts/**/*.{js,jsx}' 'config/**/*.{js,jsx}'",
+    "lint:fix": "eslint 'src/**/*.{js,jsx}' 'scripts/**/*.{js,jsx}' 'config/**/*.{js,jsx}' --fix"
   },
   "browserslist": {
     "production": [

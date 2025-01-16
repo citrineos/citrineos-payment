@@ -15,7 +15,7 @@ const sockPort = process.env.WDS_SOCKET_PORT;
 
 module.exports = function (proxy, allowedHost) {
   const disableFirewall =
-      !proxy || process.env.DANGEROUSLY_DISABLE_HOST_CHECK === 'true';
+    !proxy || process.env.DANGEROUSLY_DISABLE_HOST_CHECK === 'true';
 
   // Get HTTPS configuration, then assign it to the `server` property
   const httpsConfig = getHttpsConfig();
